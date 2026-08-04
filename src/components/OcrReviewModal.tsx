@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UploadFile, ReviewItem, OcrBlock } from '../types';
+import { DrawingCanvasPreview } from './DrawingCanvasPreview';
 import {
   X,
   ScanText,
@@ -120,27 +121,19 @@ export const OcrReviewModal: React.FC<OcrReviewModalProps> = ({ file, onClose })
             </div>
 
             {/* Drawing Viewer Container */}
-            <div className="flex-1 relative flex items-center justify-center p-4 overflow-auto bg-[#181818]">
-              <div className="relative max-w-full max-h-[65vh] inline-block shadow-2xl rounded border border-white/10">
-                <img
-                  src={fileUrl}
-                  alt="Uploaded Drawing OCR Source"
-                  className="max-w-full max-h-[62vh] object-contain rounded"
+            <div className="flex-1 relative flex items-center justify-center p-3 overflow-auto bg-[#181818]">
+              <div className="w-full h-full flex items-center justify-center">
+                <DrawingCanvasPreview
+                  fileDataUrl={'fileDataUrl' in file ? file.fileDataUrl : undefined}
+                  cadUrl={'cadUrl' in file ? file.cadUrl : undefined}
+                  drawingTitle={'drawingTitle' in file ? file.drawingTitle : file.name || file.fileName}
+                  drawingNumber={'drawingNumber' in file ? file.drawingNumber : 'DWG-SCAN'}
+                  scale={'scale' in file ? file.scale : '1 : 100'}
+                  fileName={file.name || file.fileName}
+                  ocrBlocks={blocks}
+                  className="w-full h-full min-h-[400px]"
+                  maxHeight="62vh"
                 />
-
-                {/* Simulated Visual OCR Highlight Overlays on Image */}
-                {showOcrOverlay && (
-                  <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute bottom-4 right-4 border-2 border-[#000d5f] bg-[#000d5f]/20 rounded p-2 text-white text-[10px] font-mono shadow-lg animate-pulse">
-                      📍 OCR 인식 구역: 표제란 (Title Block)
-                    </div>
-                    {selectedBlockId && (
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-emerald-400 bg-emerald-500/30 rounded p-3 text-white text-xs font-mono font-bold shadow-xl animate-bounce">
-                        선택 OCR 텍스트 감지 영역
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 

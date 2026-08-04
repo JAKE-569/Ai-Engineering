@@ -320,11 +320,14 @@ export const UploadView: React.FC<UploadViewProps> = ({
                   <tr key={file.id} className="hover:bg-[#f2f4f6] transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        {file.fileDataUrl ? (
+                        {file.fileDataUrl && file.fileDataUrl.startsWith('data:image/') ? (
                           <img
                             src={file.fileDataUrl}
                             alt="Drawing Thumbnail"
                             className="w-10 h-10 object-cover rounded border border-[#c6c5d2]"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-[#dfe0ff] flex items-center justify-center text-[#000d5f]">

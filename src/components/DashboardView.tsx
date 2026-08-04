@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ReviewItem, PageTab, UploadFile } from '../types';
+import { DrawingCanvasPreview } from './DrawingCanvasPreview';
 import {
   Gavel,
   AlertTriangle,
@@ -252,11 +253,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   >
                     <td className="px-6 py-4 font-body text-sm text-[#000d5f] font-bold">
                       <div className="flex items-center gap-3">
-                        {item.fileDataUrl ? (
+                        {item.fileDataUrl && item.fileDataUrl.startsWith('data:image/') ? (
                           <img
                             src={item.fileDataUrl}
                             alt="Drawing preview"
                             className="w-9 h-9 object-cover rounded border border-[#c6c5d2]"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                         ) : (
                           <span className="material-symbols-outlined text-[#000d5f] text-xl">
@@ -349,23 +353,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
 
-            <div className="flex-1 bg-[#1A1A1A] relative flex items-center justify-center p-6 overflow-hidden min-h-[400px]">
-              <div
-                className="absolute inset-0 opacity-20 pointer-events-none"
-                style={{
-                  backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)',
-                  backgroundSize: '20px 20px',
-                }}
-              ></div>
-
-              <img
-                src={
-                  selectedItem.fileDataUrl ||
-                  selectedItem.cadUrl ||
-                  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80'
-                }
-                alt="CAD Engineering Drawing"
-                className="max-w-full max-h-[450px] object-contain shadow-2xl rounded border border-white/10"
+            <div className="flex-1 bg-[#1A1A1A] relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
+              <DrawingCanvasPreview
+                fileDataUrl={selectedItem.fileDataUrl}
+                cadUrl={selectedItem.cadUrl}
+                drawingTitle={selectedItem.drawingTitle || selectedItem.fileName}
+                drawingNumber={selectedItem.drawingNumber || 'DWG-SCAN'}
+                scale={selectedItem.scale || '1 : 100'}
+                fileName={selectedItem.fileName}
+                className="w-full h-full"
+                maxHeight="460px"
               />
             </div>
           </div>

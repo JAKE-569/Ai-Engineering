@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DesignErrorItem } from '../types';
 import { X, ZoomIn, ZoomOut, Move, CheckCircle, MessageSquare } from 'lucide-react';
+import { DrawingCanvasPreview } from './DrawingCanvasPreview';
 
 interface CadViewerModalProps {
   errorItem: DesignErrorItem | null;
@@ -83,29 +84,24 @@ export const CadViewerModal: React.FC<CadViewerModalProps> = ({ errorItem, onClo
           </div>
 
           {/* Blueprint Image & Hotspot */}
-          <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded">
+          <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded p-2">
             <div
-              className="transition-transform duration-200 ease-out flex items-center justify-center relative"
+              className="transition-transform duration-200 ease-out flex items-center justify-center relative w-full h-full"
               style={{ transform: `scale(${zoomLevel})` }}
             >
-              <img
-                src={
-                  errorItem.fileDataUrl ||
-                  errorItem.cadUrl ||
-                  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80'
-                }
-                alt="CAD 도면 미리보기"
-                className="max-w-full max-h-[62vh] object-contain rounded border border-white/10"
+              <DrawingCanvasPreview
+                fileDataUrl={errorItem.fileDataUrl}
+                cadUrl={errorItem.cadUrl}
+                drawingTitle={errorItem.dwgFile}
+                drawingNumber={errorItem.errorCode}
+                fileName={errorItem.dwgFile}
+                highlightError={{
+                  errorCode: errorItem.errorCode,
+                  description: errorItem.description,
+                }}
+                className="w-full h-full"
+                maxHeight="68vh"
               />
-
-              {/* Error Hotspot Marker */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
-                <div className="w-24 h-24 border-2 border-[#ba1a1a] rounded-full animate-pulse flex flex-col items-center justify-center bg-red-500/10">
-                  <span className="bg-[#ba1a1a] text-white px-2 py-1 text-[10px] font-mono font-bold rounded shadow-md whitespace-nowrap mt-28">
-                    {errorItem.errorCode}: {errorItem.description}
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
 
