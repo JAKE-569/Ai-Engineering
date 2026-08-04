@@ -1,0 +1,6 @@
+{
+  "name": "POSCO AI Doc Review",
+  "description": "POSCO AI 산업 엔지니어링 도면 및 문서 검토 시스템 (법규/안전, 설계 오류, 원가 및 VE 분석, CAD 뷰어, Supabase/Vercel 연동)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
