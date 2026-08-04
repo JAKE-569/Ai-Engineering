@@ -90,11 +90,12 @@ export const CadViewerModal: React.FC<CadViewerModalProps> = ({ errorItem, onClo
             >
               <img
                 src={
+                  errorItem.fileDataUrl ||
                   errorItem.cadUrl ||
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuDuYHz6E_iQMsH4lEdZRH2ljS34R-ucm3gT6OSbdks3iM5xW6rXXoORT2LE9vN0WW5AhfyCwdnOwuDT4wLQm1DUTmvwO13JvHzGQ3eVVexqI5BetQGzqQjC0aupjTyTo5FG1hyt-nUVd04xd4--uw6GWPsfJyhm5hfMKUYLOaWrgluqcLu168I4xS4B_FLFRiaNdeUip_Iwxugr5LUWR63as8XMzt3aj7pO57Yb4jpefoxlEEP-sG8XNg'
+                  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80'
                 }
                 alt="CAD 도면 미리보기"
-                className="max-w-full max-h-[62vh] opacity-85 object-contain rounded border border-white/10"
+                className="max-w-full max-h-[62vh] object-contain rounded border border-white/10"
               />
 
               {/* Error Hotspot Marker */}

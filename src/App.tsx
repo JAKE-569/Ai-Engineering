@@ -24,6 +24,7 @@ import { DesignErrorsView } from './components/DesignErrorsView';
 import { CostVeView } from './components/CostVeView';
 import { UploadView } from './components/UploadView';
 import { CadViewerModal } from './components/CadViewerModal';
+import { OcrReviewModal } from './components/OcrReviewModal';
 import { DeploySupabaseModal } from './components/DeploySupabaseModal';
 import { ChevronDown, Folder, Layers, Database } from 'lucide-react';
 
@@ -31,7 +32,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('dashboard');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Domain Datasets
+  // Domain Datasets initialized from empty lists (sample drawings removed for real user upload)
   const [projects] = useState<Project[]>(INITIAL_PROJECTS);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('PH-2024-03');
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>(INITIAL_REVIEW_ITEMS);
@@ -46,8 +47,9 @@ export default function App() {
   // Modal States
   const [isDeployModalOpen, setIsDeployModalOpen] = useState<boolean>(false);
   const [cadModalErrorItem, setCadModalErrorItem] = useState<DesignErrorItem | null>(null);
+  const [ocrModalFile, setOcrModalFile] = useState<UploadFile | ReviewItem | null>(null);
 
-  // Try loading real data from Supabase if connected
+  // Load data from Supabase if connected
   useEffect(() => {
     async function loadSupabaseData() {
       if (supabaseConfig.isConnected) {
@@ -86,7 +88,7 @@ export default function App() {
     if (foundError) {
       setCadModalErrorItem(foundError);
     } else {
-      // Create a temporary error item for the dwg file
+      const foundReview = reviewItems.find((r) => r.fileName === dwgFile);
       setCadModalErrorItem({
         id: `temp-${Date.now()}`,
         errorCode: errorCode || 'ERR-STR-021',
@@ -94,8 +96,10 @@ export default function App() {
         description: `${dwgFile} - 배치 및 수량 산출 규격 교차 검증 도면`,
         type: 'Structural',
         severity: 'CRITICAL',
+        fileDataUrl: foundReview?.fileDataUrl || foundReview?.cadUrl,
         cadUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDuYHz6E_iQMsH4lEdZRH2ljS34R-ucm3gT6OSbdks3iM5xW6rXXoORT2LE9vN0WW5AhfyCwdnOwuDT4wLQm1DUTmvwO13JvHzGQ3eVVexqI5BetQGzqQjC0aupjTyTo5FG1hyt-nUVd04xd4--uw6GWPsfJyhm5hfMKUYLOaWrgluqcLu168I4xS4B_FLFRiaNdeUip_Iwxugr5LUWR63as8XMzt3aj7pO57Yb4jpefoxlEEP-sG8XNg',
+          foundReview?.fileDataUrl ||
+          'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80',
         suggestedFix: 'KDS 국가설계기준에 따른 주철근 간격 조정 필요.',
       });
     }
@@ -105,8 +109,40 @@ export default function App() {
     setReviewItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
   };
 
-  const handleAddUploadFile = (newFile: UploadFile) => {
+  const handleAddUploadFile = (
+    newFile: UploadFile,
+    reviewData?: {
+      reviewItem?: ReviewItem;
+      designError?: DesignErrorItem;
+      safetyItem?: SafetyItem;
+      veItem?: VeItem;
+    }
+  ) => {
     setUploadFiles((prev) => [newFile, ...prev]);
+
+    if (reviewData?.reviewItem) {
+      setReviewItems((prev) => [reviewData.reviewItem!, ...prev]);
+    }
+    if (reviewData?.designError) {
+      setDesignErrors((prev) => [reviewData.designError!, ...prev]);
+    }
+    if (reviewData?.safetyItem) {
+      setSafetyItems((prev) => [reviewData.safetyItem!, ...prev]);
+    }
+    if (reviewData?.veItem) {
+      setVeItems((prev) => [reviewData.veItem!, ...prev]);
+    }
+  };
+
+  const handleDeleteUploadFile = (id: string) => {
+    const targetFile = uploadFiles.find((f) => f.id === id);
+    if (!targetFile) return;
+
+    setUploadFiles((prev) => prev.filter((f) => f.id !== id));
+    setReviewItems((prev) => prev.filter((r) => r.fileName !== targetFile.name));
+    setDesignErrors((prev) => prev.filter((e) => e.dwgFile !== targetFile.name));
+    setSafetyItems((prev) => prev.filter((s) => s.fileName !== targetFile.name));
+    setVeItems((prev) => prev.filter((v) => !v.description.includes(targetFile.name)));
   };
 
   const activeProject = projects.find((p) => p.id === selectedProjectId) || projects[0];
@@ -157,7 +193,7 @@ export default function App() {
               className="text-xs font-mono text-[#000d5f] hover:underline flex items-center gap-1 font-bold cursor-pointer"
             >
               <Database className="w-3.5 h-3.5" />
-              GitHub / Vercel / Supabase 가이드
+              GitHub / Vercel / Supabase 연동 설정
             </button>
           </div>
         </div>
@@ -167,34 +203,48 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <DashboardView
               reviewItems={reviewItems}
+              uploadFiles={uploadFiles}
               onSelectTab={setActiveTab}
               onOpenCadViewer={handleOpenCadViewer}
+              onOpenOcrModal={(file) => setOcrModalFile(file)}
               onUpdateReviewItem={handleUpdateReviewItem}
               searchQuery={searchQuery}
             />
           )}
 
           {activeTab === 'safety' && (
-            <SafetyView safetyItems={safetyItems} searchQuery={searchQuery} />
+            <SafetyView
+              safetyItems={safetyItems}
+              onOpenCadViewer={handleOpenCadViewer}
+              onSelectTab={setActiveTab}
+              searchQuery={searchQuery}
+            />
           )}
 
           {activeTab === 'errors' && (
             <DesignErrorsView
               designErrors={designErrors}
               onOpenCadViewer={handleOpenCadViewer}
+              onSelectTab={setActiveTab}
               searchQuery={searchQuery}
             />
           )}
 
           {activeTab === 'cost_ve' && (
-            <CostVeView veItems={veItems} searchQuery={searchQuery} />
+            <CostVeView
+              veItems={veItems}
+              onSelectTab={setActiveTab}
+              searchQuery={searchQuery}
+            />
           )}
 
           {activeTab === 'upload' && (
             <UploadView
               uploadFiles={uploadFiles}
               onAddUploadFile={handleAddUploadFile}
+              onDeleteUploadFile={handleDeleteUploadFile}
               onSelectTab={setActiveTab}
+              onOpenOcrModal={(file) => setOcrModalFile(file)}
             />
           )}
         </main>
@@ -204,6 +254,12 @@ export default function App() {
       <CadViewerModal
         errorItem={cadModalErrorItem}
         onClose={() => setCadModalErrorItem(null)}
+      />
+
+      {/* OCR Review & Text Inspection Modal */}
+      <OcrReviewModal
+        file={ocrModalFile}
+        onClose={() => setOcrModalFile(null)}
       />
 
       {/* Supabase & Vercel Deployment Modal */}

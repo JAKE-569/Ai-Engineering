@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ReviewItem, PageTab } from '../types';
+import { ReviewItem, PageTab, UploadFile } from '../types';
 import {
   Gavel,
   AlertTriangle,
@@ -13,29 +13,42 @@ import {
   Save,
   RotateCcw,
   Plus,
+  ScanText,
+  FolderOpen,
+  UploadCloud,
 } from 'lucide-react';
 
 interface DashboardViewProps {
   reviewItems: ReviewItem[];
+  uploadFiles?: UploadFile[];
   onSelectTab: (tab: PageTab) => void;
   onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenOcrModal?: (file: ReviewItem) => void;
   onUpdateReviewItem: (updated: ReviewItem) => void;
   searchQuery: string;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   reviewItems,
+  uploadFiles = [],
   onSelectTab,
   onOpenCadViewer,
+  onOpenOcrModal,
   onUpdateReviewItem,
   searchQuery,
 }) => {
-  const [selectedItemId, setSelectedItemId] = useState<string>(reviewItems[0]?.id || 'rev-1');
+  const [selectedItemId, setSelectedItemId] = useState<string>(reviewItems[0]?.id || '');
   const selectedItem = reviewItems.find((item) => item.id === selectedItemId) || reviewItems[0];
 
   const [engineerNotes, setEngineerNotes] = useState<string>(selectedItem?.engineerNotes || '');
   const [currentStatus, setCurrentStatus] = useState<string>(selectedItem?.status || '오류 의심');
   const [isSaved, setIsSaved] = useState<boolean>(false);
+
+  // Dynamic status counters based on actual review items
+  const errorCount = reviewItems.filter((i) => i.status === '오류 의심' || i.status === '긴급 확인').length;
+  const warningCount = reviewItems.filter((i) => i.status === '주의' || i.status === '검토중').length;
+  const normalCount = reviewItems.filter((i) => i.status === '정상' || i.status === '검토 완료').length;
+  const unreviewedCount = reviewItems.filter((i) => i.status === '미검토' || i.status === '검토대기').length;
 
   // Filter items by search query
   const filteredItems = reviewItems.filter(
@@ -72,33 +85,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Safety & Law */}
         <div
           onClick={() => onSelectTab('safety')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-lg hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
               <span className="material-symbols-outlined text-xl">gavel</span>
-              법규 및 안전
+              법규 및 안전 검토
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
-              최신
+              실시간
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-red-50 p-3 rounded border border-red-100">
+            <div className="bg-red-50 p-3 rounded-lg border border-red-100">
               <p className="text-[10px] text-[#ba1a1a] font-bold font-mono">오류 의심</p>
-              <p className="text-2xl font-bold font-headline text-[#93000a]">12</p>
+              <p className="text-2xl font-bold font-headline text-[#93000a]">{errorCount}</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded border border-amber-100">
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
               <p className="text-[10px] text-amber-600 font-bold font-mono">주의</p>
-              <p className="text-2xl font-bold font-headline text-amber-700">08</p>
+              <p className="text-2xl font-bold font-headline text-amber-700">{warningCount}</p>
             </div>
-            <div className="bg-emerald-50 p-3 rounded border border-emerald-100">
+            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
               <p className="text-[10px] text-emerald-600 font-bold font-mono">정상</p>
-              <p className="text-2xl font-bold font-headline text-emerald-700">145</p>
+              <p className="text-2xl font-bold font-headline text-emerald-700">{normalCount}</p>
             </div>
-            <div className="bg-[#f2f4f6] p-3 rounded border border-[#c6c5d2]">
+            <div className="bg-[#f2f4f6] p-3 rounded-lg border border-[#c6c5d2]">
               <p className="text-[10px] text-[#454651] font-bold font-mono">미검토</p>
-              <p className="text-2xl font-bold font-headline text-[#191c1e]">02</p>
+              <p className="text-2xl font-bold font-headline text-[#191c1e]">{unreviewedCount}</p>
             </div>
           </div>
         </div>
@@ -106,33 +119,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Engineering Errors */}
         <div
           onClick={() => onSelectTab('errors')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-lg hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
               <span className="material-symbols-outlined text-xl">error_outline</span>
-              설계 오류
+              설계 오류 검토
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
-              진행중
+              OCR 연동
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-red-50 p-3 rounded border border-red-100">
+            <div className="bg-red-50 p-3 rounded-lg border border-red-100">
               <p className="text-[10px] text-[#ba1a1a] font-bold font-mono">오류 의심</p>
-              <p className="text-2xl font-bold font-headline text-[#93000a]">24</p>
+              <p className="text-2xl font-bold font-headline text-[#93000a]">{errorCount}</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded border border-amber-100">
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
               <p className="text-[10px] text-amber-600 font-bold font-mono">주의</p>
-              <p className="text-2xl font-bold font-headline text-amber-700">15</p>
+              <p className="text-2xl font-bold font-headline text-amber-700">{warningCount}</p>
             </div>
-            <div className="bg-emerald-50 p-3 rounded border border-emerald-100">
+            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
               <p className="text-[10px] text-emerald-600 font-bold font-mono">정상</p>
-              <p className="text-2xl font-bold font-headline text-emerald-700">89</p>
+              <p className="text-2xl font-bold font-headline text-emerald-700">{normalCount}</p>
             </div>
-            <div className="bg-[#f2f4f6] p-3 rounded border border-[#c6c5d2]">
-              <p className="text-[10px] text-[#454651] font-bold font-mono">미검토</p>
-              <p className="text-2xl font-bold font-headline text-[#191c1e]">11</p>
+            <div className="bg-[#f2f4f6] p-3 rounded-lg border border-[#c6c5d2]">
+              <p className="text-[10px] text-[#454651] font-bold font-mono">전체 도면</p>
+              <p className="text-2xl font-bold font-headline text-[#191c1e]">{reviewItems.length}</p>
             </div>
           </div>
         </div>
@@ -140,131 +153,198 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Cost & VE */}
         <div
           onClick={() => onSelectTab('cost_ve')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-lg hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
               <span className="material-symbols-outlined text-xl">payments</span>
-              공사비 및 VE
+              공사비 및 VE 분석
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
-              보류
+              최적화
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-red-50 p-3 rounded border border-red-100">
+            <div className="bg-red-50 p-3 rounded-lg border border-red-100">
               <p className="text-[10px] text-[#ba1a1a] font-bold font-mono">오류 의심</p>
-              <p className="text-2xl font-bold font-headline text-[#93000a]">05</p>
+              <p className="text-2xl font-bold font-headline text-[#93000a]">{errorCount}</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded border border-amber-100">
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
               <p className="text-[10px] text-amber-600 font-bold font-mono">주의</p>
-              <p className="text-2xl font-bold font-headline text-amber-700">19</p>
+              <p className="text-2xl font-bold font-headline text-amber-700">{warningCount}</p>
             </div>
-            <div className="bg-emerald-50 p-3 rounded border border-emerald-100">
+            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
               <p className="text-[10px] text-emerald-600 font-bold font-mono">정상</p>
-              <p className="text-2xl font-bold font-headline text-emerald-700">54</p>
+              <p className="text-2xl font-bold font-headline text-emerald-700">{normalCount}</p>
             </div>
-            <div className="bg-[#f2f4f6] p-3 rounded border border-[#c6c5d2]">
-              <p className="text-[10px] text-[#454651] font-bold font-mono">미검토</p>
-              <p className="text-2xl font-bold font-headline text-[#191c1e]">32</p>
+            <div className="bg-[#f2f4f6] p-3 rounded-lg border border-[#c6c5d2]">
+              <p className="text-[10px] text-[#454651] font-bold font-mono">VE 제안</p>
+              <p className="text-2xl font-bold font-headline text-[#191c1e]">{reviewItems.length}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recent Findings Table */}
-      <div className="bg-white border border-[#c6c5d2] rounded-lg overflow-hidden shadow-xs">
+      {/* Main Review Findings Table */}
+      <div className="bg-white border border-[#c6c5d2] rounded-xl overflow-hidden shadow-xs">
         <div className="px-6 py-4 border-b border-[#c6c5d2] flex justify-between items-center bg-[#f7f9fb]">
-          <h4 className="font-headline font-bold text-base text-[#000d5f]">최근 검토 항목</h4>
+          <div>
+            <h4 className="font-headline font-bold text-base text-[#000d5f]">
+              업로드 도면 검토 목록
+            </h4>
+            <p className="font-body text-xs text-[#454651] mt-0.5">
+              실제 업로드된 도면의 OCR 스캔 결과 및 AI 엔지니어링 검토 항목
+            </p>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => onSelectTab('upload')}
-              className="px-4 py-1.5 bg-[#000d5f] text-white rounded text-xs font-mono font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-[#000d5f] text-white rounded-lg text-xs font-mono font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              <Plus className="w-3.5 h-3.5" />
-              새 문서 업로드
+              <Plus className="w-4 h-4" />
+              실제 도면 업로드
             </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse zebra-table">
-            <thead>
-              <tr className="bg-[#f2f4f6] border-b border-[#c6c5d2]">
-                <th className="px-6 py-3 font-mono text-xs text-[#454651]">파일명</th>
-                <th className="px-6 py-3 font-mono text-xs text-[#454651]">검토 유형</th>
-                <th className="px-6 py-3 font-mono text-xs text-[#454651]">분석 상태</th>
-                <th className="px-6 py-3 font-mono text-xs text-[#454651]">검토 결과</th>
-                <th className="px-6 py-3 font-mono text-xs text-[#454651]">최종 업데이트</th>
-                <th className="px-6 py-3 font-mono text-xs text-[#454651] text-right">상세보기</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#c6c5d2]">
-              {filteredItems.map((item) => (
-                <tr
-                  key={item.id}
-                  onClick={() => handleSelectRow(item)}
-                  className={`hover:bg-[#eceef0] transition-colors cursor-pointer ${
-                    selectedItemId === item.id ? 'bg-[#dfe0ff]/40 font-medium' : ''
-                  }`}
-                >
-                  <td className="px-6 py-4 font-body text-sm text-[#000d5f] font-medium">
-                    {item.fileName}
-                  </td>
-                  <td className="px-6 py-4 font-body text-sm text-[#191c1e]">{item.reviewType}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
-                        item.status === '오류 의심'
-                          ? 'bg-red-100 text-red-800'
-                          : item.status === '주의'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-body text-sm text-[#191c1e]">{item.result}</td>
-                  <td className="px-6 py-4 font-body text-xs text-[#454651]">{item.updatedAt}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectRow(item);
-                        if (item.reviewType === '설계 오류') {
-                          onOpenCadViewer(item.fileName, 'ERR-STR-021');
-                        }
-                      }}
-                      className="text-[#000d5f] hover:underline font-mono text-xs font-bold cursor-pointer"
-                    >
-                      상세보기
-                    </button>
-                  </td>
+        {reviewItems.length === 0 ? (
+          <div className="p-12 text-center text-[#767682] space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-[#dfe0ff] flex items-center justify-center text-[#000d5f]">
+              <UploadCloud className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="font-headline font-bold text-lg text-[#191c1e]">
+                검토할 업로드 도면이 없습니다.
+              </h3>
+              <p className="font-body text-xs text-[#454651] mt-1 max-w-md mx-auto">
+                기존 sample 도면이 정리되었습니다. '도면 업로드' 메뉴에서 실제 도면 이미지나 CAD/PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
+              </p>
+            </div>
+            <button
+              onClick={() => onSelectTab('upload')}
+              className="px-6 py-2.5 bg-[#000d5f] text-white rounded-xl text-xs font-mono font-bold hover:opacity-90 transition-all cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              첫 번째 도면 업로드하기
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse zebra-table">
+              <thead>
+                <tr className="bg-[#f2f4f6] border-b border-[#c6c5d2]">
+                  <th className="px-6 py-3 font-mono text-xs text-[#454651]">도면 / 파일명</th>
+                  <th className="px-6 py-3 font-mono text-xs text-[#454651]">검토 유형</th>
+                  <th className="px-6 py-3 font-mono text-xs text-[#454651]">분석 상태</th>
+                  <th className="px-6 py-3 font-mono text-xs text-[#454651]">OCR 도면검토 결과</th>
+                  <th className="px-6 py-3 font-mono text-xs text-[#454651]">업데이트 일시</th>
+                  <th className="px-6 py-3 font-mono text-xs text-[#454651] text-right">상세 및 OCR</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[#c6c5d2]">
+                {filteredItems.map((item) => (
+                  <tr
+                    key={item.id}
+                    onClick={() => handleSelectRow(item)}
+                    className={`hover:bg-[#eceef0] transition-colors cursor-pointer ${
+                      selectedItemId === item.id ? 'bg-[#dfe0ff]/40 font-medium' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 font-body text-sm text-[#000d5f] font-bold">
+                      <div className="flex items-center gap-3">
+                        {item.fileDataUrl ? (
+                          <img
+                            src={item.fileDataUrl}
+                            alt="Drawing preview"
+                            className="w-9 h-9 object-cover rounded border border-[#c6c5d2]"
+                          />
+                        ) : (
+                          <span className="material-symbols-outlined text-[#000d5f] text-xl">
+                            architecture
+                          </span>
+                        )}
+                        <div>
+                          <span>{item.fileName}</span>
+                          <span className="text-[11px] font-mono text-[#454651] block font-normal">
+                            {item.drawingTitle || item.fileName}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 font-body text-sm text-[#191c1e]">{item.reviewType}</td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
+                          item.status === '오류 의심' || item.status === '긴급 확인'
+                            ? 'bg-red-100 text-red-800'
+                            : item.status === '주의'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-body text-sm text-[#191c1e]">{item.result}</td>
+                    <td className="px-6 py-4 font-body text-xs text-[#454651]">{item.updatedAt}</td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      {onOpenOcrModal && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenOcrModal(item);
+                          }}
+                          className="px-2.5 py-1 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <ScanText className="w-3.5 h-3.5" />
+                          OCR
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectRow(item);
+                          onOpenCadViewer(item.fileName, 'ERR-STR-021');
+                        }}
+                        className="text-[#000d5f] hover:underline font-mono text-xs font-bold cursor-pointer"
+                      >
+                        상세보기
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Split View Panel (Lower Half) */}
       {selectedItem && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[580px]">
-          {/* Left: Original CAD Document View */}
-          <div className="bg-white border border-[#c6c5d2] rounded-lg flex flex-col overflow-hidden shadow-xs">
+          {/* Left: Original CAD / Image Document View */}
+          <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
               <h5 className="font-headline font-bold text-sm text-[#191c1e] flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#000d5f]" />
-                원본 도면 보기 ({selectedItem.fileName})
+                업로드 도면 원본 ({selectedItem.fileName})
               </h5>
               <div className="flex gap-1.5">
+                {onOpenOcrModal && (
+                  <button
+                    onClick={() => onOpenOcrModal(selectedItem)}
+                    className="px-3 py-1 bg-[#dfe0ff] text-[#000d5f] text-xs font-mono font-bold rounded hover:bg-[#000d5f] hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <ScanText className="w-3.5 h-3.5" />
+                    OCR 레이어 스캔
+                  </button>
+                )}
                 <button
                   onClick={() => onOpenCadViewer(selectedItem.fileName, 'ERR-STR-021')}
                   className="px-3 py-1 bg-[#000d5f] text-white text-xs font-mono font-bold rounded hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-sm">visibility</span>
-                  전체 CAD 뷰어
+                  CAD 뷰어
                 </button>
               </div>
             </div>
@@ -280,68 +360,69 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <img
                 src={
+                  selectedItem.fileDataUrl ||
                   selectedItem.cadUrl ||
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuAjbzfGI-oTYBygbRTWR10_iUWHBinTL3_xxn_QSsEJxyzTBHaniWQq38PhzKE8f2sVJubk4T3mNJWMnbVI1ubO2UykG5lOQMm_Hvyj1bbrWg9mmetOEDoLDQmEy_7F1Ae-o5xWkWkWEh9dPWOMm6MDECQOQjAo38RXwTgXxmm1FOHnfvxnYFXHqvMGGbKxV9XClru3cSUh6iKG6EY5TJWqjrNS33ev2_tE_7MwQ1ZJ_VjFLT5U3GjK5Q'
+                  'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80'
                 }
-                alt="CAD Engineering Blueprint"
+                alt="CAD Engineering Drawing"
                 className="max-w-full max-h-[450px] object-contain shadow-2xl rounded border border-white/10"
               />
             </div>
           </div>
 
-          {/* Right: Review Findings & Editor Panel */}
-          <div className="bg-white border border-[#c6c5d2] rounded-lg flex flex-col shadow-xs">
+          {/* Right: OCR Review Findings & Editor Panel */}
+          <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] flex justify-between items-center bg-[#f7f9fb]">
               <h5 className="font-headline font-bold text-base text-[#ba1a1a] flex items-center gap-2">
                 <AlertOctagon className="w-5 h-5 text-[#ba1a1a]" />
-                중대 결함 발견
+                도면 검토 분석 리포트
               </h5>
               <span className="font-mono text-xs px-3 py-1 bg-red-100 text-red-800 rounded-full font-bold">
-                우선순위: 높음
+                {selectedItem.status}
               </span>
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto space-y-5 custom-scrollbar">
               <section>
                 <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
-                  분석 내용
+                  OCR 추출 표제란 & 기본 스펙
                 </h6>
-                <p className="font-body text-sm leading-relaxed text-[#191c1e] bg-[#f2f4f6] p-4 rounded-lg border-l-4 border-[#000d5f]">
-                  {selectedItem.description ||
-                    '배치도와 장비 리스트의 설비 수량 불일치. GA 도면에는 펌프 2대가 표시되어 있으나, 최신 P&ID(PID-602) 및 장비 리스트에는 예비 펌프(P-101C)를 포함한 3대가 명시됨.'}
-                </p>
-              </section>
-
-              <section>
-                <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
-                  분석 근거 (CROSS-REFERENCE)
-                </h6>
-                <div className="space-y-2">
-                  {(selectedItem.crossReferences || [
-                    { title: 'PID-602_Rev04.pdf', type: 'pdf' },
-                    { title: 'Equipment_List_V3.2.xlsx', type: 'xlsx' },
-                  ]).map((ref, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-3 border border-[#c6c5d2] rounded-lg hover:bg-[#f2f4f6] transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-[#000d5f]">
-                          {ref.type === 'pdf' ? 'picture_as_pdf' : 'description'}
-                        </span>
-                        <span className="font-body text-xs text-[#191c1e] font-medium">
-                          {ref.title}
-                        </span>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-[#767682] opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-3 bg-[#f2f4f6] p-4 rounded-lg border border-[#c6c5d2] text-xs font-mono">
+                  <div>
+                    <span className="text-[#767682] block">도면명:</span>
+                    <span className="font-bold text-[#000d5f]">
+                      {selectedItem.drawingTitle || selectedItem.fileName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[#767682] block">도면번호:</span>
+                    <span className="font-bold text-[#191c1e]">
+                      {selectedItem.drawingNumber || 'DWG-SCAN'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[#767682] block">축척:</span>
+                    <span className="font-bold text-[#191c1e]">{selectedItem.scale || '1 : 100'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#767682] block">검토일시:</span>
+                    <span className="font-bold text-[#191c1e]">{selectedItem.updatedAt}</span>
+                  </div>
                 </div>
               </section>
 
               <section>
                 <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
-                  상태 설정
+                  AI 분석 결과
+                </h6>
+                <p className="font-body text-sm leading-relaxed text-[#191c1e] bg-[#f2f4f6] p-4 rounded-lg border-l-4 border-[#000d5f]">
+                  {selectedItem.description}
+                </p>
+              </section>
+
+              <section>
+                <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
+                  검토 상태 변경
                 </h6>
                 <div className="flex gap-3">
                   <button
@@ -382,12 +463,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <section>
                 <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
-                  엔지니어 메모
+                  엔지니어 검토 의견
                 </h6>
                 <textarea
                   value={engineerNotes}
                   onChange={(e) => setEngineerNotes(e.target.value)}
-                  placeholder="수정 사항이나 검토 의견을 입력하세요..."
+                  placeholder="도면 검토 보정안 또는 조치 메모 입력..."
                   className="w-full h-28 p-3 bg-[#f7f9fb] border border-[#c6c5d2] rounded-lg focus:border-[#000d5f] focus:ring-1 focus:ring-[#000d5f] outline-none transition-all font-body text-xs text-[#191c1e]"
                 />
               </section>
@@ -400,21 +481,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
               )}
               <button
-                onClick={() => {
-                  setEngineerNotes(selectedItem.engineerNotes || '');
-                  setCurrentStatus(selectedItem.status);
-                }}
-                className="px-4 py-2 border border-[#c6c5d2] rounded-lg font-mono text-xs text-[#454651] hover:bg-[#e6e8ea] transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                변경사항 취소
-              </button>
-              <button
                 onClick={handleSaveNotes}
                 className="px-5 py-2 bg-[#000d5f] text-white rounded-lg font-mono text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Save className="w-3.5 h-3.5" />
-                저장 및 내보내기
+                검토의견 저장
               </button>
             </div>
           </div>
