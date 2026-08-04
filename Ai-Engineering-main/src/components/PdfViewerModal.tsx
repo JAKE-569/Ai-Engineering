@@ -58,7 +58,12 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
     }
   };
 
-  const isRealPdf = fileDataUrl && (fileDataUrl.includes('application/pdf') || fileDataUrl.includes('data:application/pdf'));
+  const isRealPdf = Boolean(
+    fileDataUrl &&
+      (fileDataUrl.startsWith('data:application/pdf') ||
+        fileDataUrl.toLowerCase().includes('.pdf') ||
+        fileName.toLowerCase().endsWith('.pdf'))
+  );
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 animate-fadeIn">
@@ -201,12 +206,19 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
 
                 {/* PDF Document Body / Image Rendering */}
                 {isRealPdf ? (
-                  <div className="relative w-full h-[580px] rounded border border-gray-300 mt-4 overflow-hidden shadow-inner">
-                    <iframe
-                      src={fileDataUrl}
-                      className="w-full h-full rounded"
-                      title="Real PDF View"
-                    />
+                  <div className="relative w-full h-[580px] rounded border border-gray-300 mt-4 overflow-hidden bg-gray-200 shadow-inner">
+                    <object
+                      data={fileDataUrl}
+                      type="application/pdf"
+                      className="absolute inset-0 z-10 w-full h-full rounded bg-white"
+                      aria-label={`${fileName} PDF 도면`}
+                    >
+                      <iframe
+                        src={fileDataUrl}
+                        className="w-full h-full rounded bg-white"
+                        title="실제 PDF 도면 미리보기"
+                      />
+                    </object>
                     {/* Floating Red Markups Overlay on top of real PDF embed */}
                     {showMarkups && (
                       <div className="absolute inset-0 pointer-events-none z-30">
