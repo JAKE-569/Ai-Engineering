@@ -34,7 +34,7 @@ export default function App() {
 
   // Domain Datasets initialized from empty lists (sample drawings removed for real user upload)
   const [projects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('PH-2024-03');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('POSCO-PLANT-01');
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>(INITIAL_REVIEW_ITEMS);
   const [safetyItems, setSafetyItems] = useState<SafetyItem[]>(INITIAL_SAFETY_ITEMS);
   const [designErrors, setDesignErrors] = useState<DesignErrorItem[]>(INITIAL_DESIGN_ERRORS);
@@ -85,22 +85,48 @@ export default function App() {
       (e) => e.dwgFile === dwgFile || (errorCode && e.errorCode === errorCode)
     );
 
+    const foundReview = reviewItems.find((r) => r.fileName === dwgFile);
+    const foundUpload = uploadFiles.find((u) => u.name === dwgFile);
+
     if (foundError) {
-      setCadModalErrorItem(foundError);
+      setCadModalErrorItem({
+        ...foundError,
+        docCategory: foundError.docCategory || foundReview?.docCategory || foundUpload?.docCategory || '도면',
+        tradeCategory: foundError.tradeCategory || foundReview?.tradeCategory || foundUpload?.tradeCategory || '소방',
+        drawingTitle: foundError.drawingTitle || foundReview?.drawingTitle || foundUpload?.drawingTitle || dwgFile,
+        ocrBlocks: foundError.ocrBlocks || foundReview?.ocrBlocks || foundUpload?.ocrBlocks,
+        markups:
+          foundError.markups && foundError.markups.length > 0
+            ? foundError.markups
+            : foundReview?.markups || foundUpload?.markups,
+        fileDataUrl: foundError.fileDataUrl || foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundError.cadUrl,
+        cadUrl: foundError.cadUrl || foundReview?.fileDataUrl || foundUpload?.fileDataUrl,
+      });
     } else {
-      const foundReview = reviewItems.find((r) => r.fileName === dwgFile);
       setCadModalErrorItem({
         id: `temp-${Date.now()}`,
-        errorCode: errorCode || 'ERR-STR-021',
+        errorCode: errorCode || `ERR-${(foundReview?.tradeCategory || foundUpload?.tradeCategory || 'CAD').substring(0, 3).toUpperCase()}-001`,
         dwgFile,
-        description: `${dwgFile} - 배치 및 수량 산출 규격 교차 검증 도면`,
-        type: 'Structural',
+        docCategory: foundReview?.docCategory || foundUpload?.docCategory || '도면',
+        tradeCategory: foundReview?.tradeCategory || foundUpload?.tradeCategory || '소방',
+        drawingTitle: foundReview?.drawingTitle || foundUpload?.drawingTitle || dwgFile,
+        description: `${dwgFile} - CAD 도면 레이어, OCR 텍스트 및 기술 규격 정밀 검토`,
+        type:
+          (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '토목'
+            ? 'Civil'
+            : (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '건축전기'
+            ? 'Electrical'
+            : (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '건축기계'
+            ? 'Mechanical'
+            : (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '소방'
+            ? 'Fire'
+            : 'Structural',
         severity: 'CRITICAL',
-        fileDataUrl: foundReview?.fileDataUrl || foundReview?.cadUrl,
-        cadUrl:
-          foundReview?.fileDataUrl ||
-          'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=1200&q=80',
-        suggestedFix: 'KDS 국가설계기준에 따른 주철근 간격 조정 필요.',
+        fileDataUrl: foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundReview?.cadUrl,
+        cadUrl: foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundReview?.cadUrl,
+        ocrBlocks: foundReview?.ocrBlocks || foundUpload?.ocrBlocks,
+        markups: foundReview?.markups || foundUpload?.markups,
+        suggestedFix: 'KDS / KEC / NFTC 국가기술기준에 의거한 설계 및 규격 수정 적용.',
       });
     }
   };
@@ -193,7 +219,7 @@ export default function App() {
               className="text-xs font-mono text-[#000d5f] hover:underline flex items-center gap-1 font-bold cursor-pointer"
             >
               <Database className="w-3.5 h-3.5" />
-              GitHub / Vercel / Supabase 연동 설정
+              백엔드 DB & AI Engine 연동 설정
             </button>
           </div>
         </div>
@@ -245,6 +271,7 @@ export default function App() {
               onDeleteUploadFile={handleDeleteUploadFile}
               onSelectTab={setActiveTab}
               onOpenOcrModal={(file) => setOcrModalFile(file)}
+              onOpenCadViewer={handleOpenCadViewer}
             />
           )}
         </main>

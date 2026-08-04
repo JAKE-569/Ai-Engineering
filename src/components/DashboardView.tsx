@@ -218,7 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 검토할 업로드 도면이 없습니다.
               </h3>
               <p className="font-body text-xs text-[#454651] mt-1 max-w-md mx-auto">
-                기존 sample 도면이 정리되었습니다. '도면 업로드' 메뉴에서 실제 도면 이미지나 CAD/PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
+                '도면 업로드' 메뉴에서 도면 이미지나 CAD/PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
               </p>
             </div>
             <button
@@ -243,9 +243,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#c6c5d2]">
-                {filteredItems.map((item) => (
+                {filteredItems.map((item, idx) => (
                   <tr
-                    key={item.id}
+                    key={item.id || `rev-${item.fileName}-${idx}`}
                     onClick={() => handleSelectRow(item)}
                     className={`hover:bg-[#eceef0] transition-colors cursor-pointer ${
                       selectedItemId === item.id ? 'bg-[#dfe0ff]/40 font-medium' : ''

@@ -57,58 +57,36 @@ export const CadViewerModal: React.FC<CadViewerModalProps> = ({ errorItem, onClo
         </div>
 
         {/* CAD Canvas Area */}
-        <div className="flex-1 bg-[#1e1e1e] relative overflow-hidden flex items-center justify-center p-6 select-none">
-          {/* Controls Overlay */}
-          <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-            <button
-              onClick={handleZoomIn}
-              className="w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
-              title="확대"
-            >
-              <ZoomIn className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
-              title="축소"
-            >
-              <ZoomOut className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setZoomLevel(1)}
-              className="w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
-              title="기본 크기"
-            >
-              <Move className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Blueprint Image & Hotspot */}
-          <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded p-2">
-            <div
-              className="transition-transform duration-200 ease-out flex items-center justify-center relative w-full h-full"
-              style={{ transform: `scale(${zoomLevel})` }}
-            >
-              <DrawingCanvasPreview
-                fileDataUrl={errorItem.fileDataUrl}
-                cadUrl={errorItem.cadUrl}
-                drawingTitle={errorItem.dwgFile}
-                drawingNumber={errorItem.errorCode}
-                fileName={errorItem.dwgFile}
-                highlightError={{
-                  errorCode: errorItem.errorCode,
-                  description: errorItem.description,
-                }}
-                className="w-full h-full"
-                maxHeight="68vh"
-              />
-            </div>
+        <div className="flex-1 bg-[#0a111e] relative overflow-hidden flex flex-col items-center justify-center p-3 select-none">
+          {/* Blueprint Image & Interactive CAD Stage */}
+          <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded">
+            <DrawingCanvasPreview
+              fileDataUrl={errorItem.fileDataUrl}
+              cadUrl={errorItem.cadUrl}
+              drawingTitle={errorItem.drawingTitle || errorItem.dwgFile}
+              drawingNumber={errorItem.errorCode}
+              fileName={errorItem.dwgFile}
+              docCategory={errorItem.docCategory || '도면'}
+              tradeCategory={errorItem.tradeCategory || '소방'}
+              ocrBlocks={errorItem.ocrBlocks}
+              markups={errorItem.markups}
+              highlightError={{
+                errorCode: errorItem.errorCode,
+                description: errorItem.description,
+                codeClause: errorItem.suggestedFix,
+              }}
+              className="w-full h-full"
+              maxHeight="72vh"
+            />
           </div>
 
           {/* Annotations List */}
           {annotations.length > 0 && (
-            <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md text-white p-3 rounded-lg max-w-xs border border-white/20 text-xs">
-              <p className="font-bold text-[#bbc3ff] mb-1">등록된 엔지니어 주석 ({annotations.length})</p>
+            <div className="absolute top-16 right-6 bg-black/85 backdrop-blur-md text-white p-3 rounded-xl max-w-xs border border-white/20 text-xs shadow-2xl z-30">
+              <p className="font-bold text-emerald-300 mb-1 flex items-center gap-1">
+                <MessageSquare className="w-3.5 h-3.5" />
+                엔지니어 보정 주석 ({annotations.length})
+              </p>
               <ul className="space-y-1 list-disc pl-4 text-[11px] text-gray-200">
                 {annotations.map((ann, idx) => (
                   <li key={idx}>{ann}</li>

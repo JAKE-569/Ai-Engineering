@@ -100,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenDeployGuide}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-all cursor-pointer"
-          title="백엔드 Supabase, Vercel & AI Engine 연동 현황"
+          title="백엔드 DB & AI Engine 연동 현황"
         >
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           <span className="hidden sm:inline">백엔드 연동 완료</span>

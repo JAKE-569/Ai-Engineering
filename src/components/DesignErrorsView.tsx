@@ -230,7 +230,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
               <tbody className="divide-y divide-[#c6c5d2]">
                 {filteredErrors.map((item, idx) => (
                   <tr
-                    key={item.id}
+                    key={item.id || `err-${item.errorCode}-${idx}`}
                     className={`hover:bg-[#eceef0] transition-colors ${
                       idx % 2 === 1 ? 'bg-[#f2f4f6]/50' : ''
                     }`}

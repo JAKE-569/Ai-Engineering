@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SupabaseConfig } from '../types';
 import { SUPABASE_SCHEMA_SQL } from '../lib/supabaseClient';
-import { X, Database, Github, ExternalLink, Check, Copy, RefreshCw, Server, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { X, Database, Check, Copy, RefreshCw, Server, CheckCircle2 } from 'lucide-react';
 
 interface DeploySupabaseModalProps {
   isOpen: boolean;
@@ -18,7 +18,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
   onSaveConfig,
   onSyncDataToSupabase,
 }) => {
-  const [activeTab, setActiveTab] = useState<'status' | 'sql' | 'vercel'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'sql'>('status');
   const [copiedSql, setCopiedSql] = useState(false);
   const [isTestingBackend, setIsTestingBackend] = useState(false);
   const [backendStatusInfo, setBackendStatusInfo] = useState<any>(null);
@@ -38,7 +38,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
       const data = await res.json();
       setBackendStatusInfo(data);
     } catch (err) {
-      setBackendStatusInfo({ status: 'active', message: '백엔드 Express/Vercel 서버 정상 가동 중' });
+      setBackendStatusInfo({ status: 'active', message: '백엔드 Express 서버 정상 가동 중' });
     } finally {
       setIsTestingBackend(false);
     }
@@ -58,7 +58,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
           <div className="flex items-center gap-3">
             <Database className="w-6 h-6 text-[#bbc3ff]" />
             <div>
-              <h3 className="font-headline font-bold text-lg">백엔드 Supabase & Vercel 통합 연동 현황</h3>
+              <h3 className="font-headline font-bold text-lg">백엔드 DB & AI Engine 연동 현황</h3>
               <p className="font-mono text-xs text-[#bbc3ff]">
                 POSCO AI Doc Review 서버 사이드 DB 및 AI Engine pre-integration
               </p>
@@ -94,16 +94,6 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
           >
             2. DB 스키마 (SQL)
           </button>
-          <button
-            onClick={() => setActiveTab('vercel')}
-            className={`px-5 py-3 font-mono text-xs font-bold border-b-2 transition-all ${
-              activeTab === 'vercel'
-                ? 'border-[#000d5f] text-[#000d5f] bg-white'
-                : 'border-transparent text-[#454651] hover:text-[#191c1e]'
-            }`}
-          >
-            3. GitHub & Vercel 내역
-          </button>
         </div>
 
         {/* Tab Content */}
@@ -114,10 +104,10 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-1">
                   <p className="font-bold text-emerald-900 text-sm">
-                    백엔드 Supabase & Vercel 연동 완료 (Pre-Integrated)
+                    백엔드 데이터베이스 & AI Engine 연동 완료 (Pre-Integrated)
                   </p>
                   <p className="text-emerald-800 leading-relaxed">
-                    클라이언트 앱 내의 개별 입력이 아닌, Express 백엔드 서버에서 Supabase PostgreSQL 데이터베이스 및 Gemini 3.6 Flash Vision OCR 엔진 연동이 기 수행되어 있습니다.
+                    Express 백엔드 서버에서 PostgreSQL 데이터베이스 및 Gemini 3.6 Flash Vision OCR 엔진 연동이 수행되어 있습니다.
                   </p>
                 </div>
               </div>
@@ -128,7 +118,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
                     백엔드 DB 엔진
                   </span>
                   <p className="font-headline font-bold text-sm text-[#000d5f]">
-                    Supabase PostgreSQL (Active)
+                    PostgreSQL / Supabase (Active)
                   </p>
                   <p className="text-xs text-[#454651]">
                     도면 검토 데이터, OCR 블록 및 안전검토 리포트 자동 저장
@@ -137,10 +127,10 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
 
                 <div className="p-4 bg-[#f2f4f6] border border-[#c6c5d2] rounded-lg space-y-2">
                   <span className="font-mono text-[10px] uppercase text-[#767682] font-bold block">
-                    서버 인프라 & 배포
+                    서버 인프라
                   </span>
                   <p className="font-headline font-bold text-sm text-[#000d5f]">
-                    Cloud Run / Vercel Ready
+                    Express AI Server Active
                   </p>
                   <p className="text-xs text-[#454651]">
                     Vite + Express 서버 통합 서빙 (/api/gemini/review-drawing)
@@ -176,7 +166,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#454651]">
-                  백엔드 Supabase DB에 자동 구축된 PostgreSQL 스키마 구문입니다.
+                  백엔드 DB에 자동 구축된 PostgreSQL 스키마 구문입니다.
                 </p>
                 <button
                   onClick={handleCopySql}
@@ -190,20 +180,6 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
               <pre className="bg-[#1e1e1e] text-emerald-400 p-4 rounded-lg font-mono text-[11px] overflow-x-auto max-h-72 border border-[#c6c5d2] custom-scrollbar">
                 {SUPABASE_SCHEMA_SQL}
               </pre>
-            </div>
-          )}
-
-          {activeTab === 'vercel' && (
-            <div className="space-y-5 text-xs text-[#191c1e]">
-              <div className="p-4 bg-[#f2f4f6] border border-[#c6c5d2] rounded-lg space-y-3">
-                <h4 className="font-bold text-sm text-[#000d5f] flex items-center gap-2">
-                  <Github className="w-4 h-4" />
-                  GitHub Repository & Vercel 배포 내역
-                </h4>
-                <p className="text-[#454651] leading-relaxed">
-                  본 애플리케이션은 Express 및 Vite 통합 구조로 작성되어 GitHub Export 후 Vercel이나 Cloud Run에 1-Click으로 바로 배포 가능하도록 구축되어 있습니다.
-                </p>
-              </div>
             </div>
           )}
         </div>

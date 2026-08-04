@@ -73,8 +73,8 @@ export const SafetyView: React.FC<SafetyViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#c6c5d2] text-xs font-body">
-                {filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#f2f4f6]">
+                {filtered.map((item, idx) => (
+                  <tr key={item.id || `safety-${item.fileName}-${idx}`} className="hover:bg-[#f2f4f6]">
                     <td className="px-6 py-4 font-bold text-[#000d5f]">{item.fileName}</td>
                     <td className="px-6 py-4 font-mono text-[#454651]">{item.lawRegulation}</td>
                     <td className="px-6 py-4 text-[#191c1e]">{item.summary}</td>

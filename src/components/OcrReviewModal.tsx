@@ -130,7 +130,10 @@ export const OcrReviewModal: React.FC<OcrReviewModalProps> = ({ file, onClose })
                   drawingNumber={'drawingNumber' in file ? file.drawingNumber : 'DWG-SCAN'}
                   scale={'scale' in file ? file.scale : '1 : 100'}
                   fileName={file.name || file.fileName}
+                  docCategory={file.docCategory || '도면'}
+                  tradeCategory={file.tradeCategory || '소방'}
                   ocrBlocks={blocks}
+                  markups={'markups' in file && file.markups ? file.markups : undefined}
                   className="w-full h-full min-h-[400px]"
                   maxHeight="62vh"
                 />
