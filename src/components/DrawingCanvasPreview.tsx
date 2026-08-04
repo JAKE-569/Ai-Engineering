@@ -249,85 +249,72 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                 </div>
               </div>
 
-              {/* Real PDF Embed or Interactive PDF Sheet Content */}
-              {rawUrl && rawUrl.startsWith('data:application/pdf') ? (
-                <div className="relative w-full h-[400px]">
-                  <object
-                    data={rawUrl}
-                    type="application/pdf"
-                    className="w-full h-full rounded border border-gray-300 shadow-inner"
-                  >
-                    <iframe
-                      src={rawUrl}
-                      className="w-full h-full rounded border border-gray-300"
-                      title={`${tradeCategory} PDF Document`}
-                    />
-                  </object>
+              {/* Interactive PDF Drawing Blueprint Canvas */}
+              <div className="w-full h-[390px] bg-gray-50 border border-gray-200 rounded-lg p-5 relative overflow-auto font-mono text-xs text-gray-800 space-y-4 shadow-inner">
+                {/* PDF Document Summary Block */}
+                <div className="bg-white p-3.5 rounded-md border border-gray-300 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-sm text-[#000d5f] block flex items-center gap-1.5">
+                      <FileCheck className="w-4 h-4 text-emerald-600" />
+                      📄 PDF 엔지니어링 도면 스캔 분석 완료
+                    </span>
+                    <p className="text-[11px] text-gray-600 mt-0.5 font-sans">
+                      공종: <strong className="text-blue-900">{tradeCategory}</strong> | 분류:{' '}
+                      <strong>{docCategory}</strong> | 축척: <strong>{scale}</strong> | 엔지니어링 기준:{' '}
+                      <strong className="text-emerald-800">KDS / KEC / NFTC 준수</strong>
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 bg-red-600 text-white rounded text-[11px] font-bold shadow-xs">
+                    RED MARKUPS ACTIVE
+                  </span>
                 </div>
-              ) : (
-                <div className="w-full h-[390px] bg-gray-50 border border-gray-200 rounded-lg p-5 relative overflow-auto font-mono text-xs text-gray-800 space-y-4 shadow-inner">
-                  {/* PDF Document Summary Block */}
-                  <div className="bg-white p-3.5 rounded-md border border-gray-300 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-sm text-[#000d5f] block">📄 PDF 도면 세부 사양</span>
-                      <p className="text-[11px] text-gray-600 mt-0.5 font-sans">
-                        공종: <strong className="text-blue-900">{tradeCategory}</strong> | 분류:{' '}
-                        <strong>{docCategory}</strong> | 축척: <strong>{scale}</strong> | 엔지니어링 기준:{' '}
-                        <strong className="text-emerald-800">KDS / KEC / NFTC 준수</strong>
-                      </p>
-                    </div>
-                    <span className="px-3 py-1 bg-red-600 text-white rounded text-[11px] font-bold shadow-xs">
-                      RED ANNOTATIONS ACTIVE
+
+                {/* Red Law & Error Violation Box 1 */}
+                <div className="bg-red-50/90 border-2 border-red-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
+                  <div className="flex items-center justify-between border-b border-red-200 pb-1.5 font-bold text-red-900">
+                    <span className="flex items-center gap-1.5 text-xs">
+                      🔴 [빨간색 마크업 1] {tradeCategory} 공종 ({title}) 법규 위반 및 규격 미달 지적
+                    </span>
+                    <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
+                      CRITICAL
                     </span>
                   </div>
-
-                  {/* Red Law & Error Violation Box 1 */}
-                  <div className="bg-red-50/90 border-2 border-red-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
-                    <div className="flex items-center justify-between border-b border-red-200 pb-1.5 font-bold text-red-900">
-                      <span className="flex items-center gap-1.5 text-xs">
-                        🔴 [빨간색 주석 1] {tradeCategory} 공종 ({title}) 법규 위반 및 규격 미달 지적
-                      </span>
-                      <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
-                        CRITICAL
-                      </span>
-                    </div>
-                    <p className="text-red-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-red-600 shadow-2xs">
-                      {tradeCategory === '토목'
-                        ? `${title}: KDS 11 10 00 / KDS 21 30 00 기준 H-Pile 흙막이 앵커 긴장력 부족 및 사면 토압 검토 필요.`
-                        : tradeCategory === '건축'
-                        ? `${title}: 건축법 시행령 제34조 직통계단 보행거리 38.5m(법정 30m 이하) 초과 및 피난동선 보정 지적.`
-                        : tradeCategory === '건축기계'
-                        ? `${title}: KDS 31 25 10 공조 급기 덕트(SA) 풍속 8.5m/s 과다(기준 6.0m/s 이하) 및 소음기 설치 필요.`
-                        : tradeCategory === '건축전기'
-                        ? `${title}: KEC(한국전기설비규정) 230 수전반 메인 케이블 허용전류 및 전선관 충전율 40% 초과 지적.`
-                        : `${title}: NFTC 102/103 화재안전기술기준 스프링클러 헤드 살수반경(R=2.3m) 미달 및 가지배관 직경 보정 요구.`}
-                    </p>
-                  </div>
-
-                  {/* Red Law & Error Violation Box 2 */}
-                  <div className="bg-amber-50/90 border-2 border-amber-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
-                    <div className="flex items-center justify-between border-b border-amber-200 pb-1.5 font-bold text-amber-900">
-                      <span className="flex items-center gap-1.5 text-xs">
-                        🔴 [빨간색 주석 2] {tradeCategory} 공종 안전성 & 법규 준수 재검토 필요
-                      </span>
-                      <span className="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
-                        WARNING
-                      </span>
-                    </div>
-                    <p className="text-amber-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-amber-500 shadow-2xs">
-                      {tradeCategory === '토목'
-                        ? `${title}: 지하안전관리에 관한 특별법 및 KDS 44 50 00 우수관 구배(1/150) 부족 및 계측기(Inclinometer) 누락.`
-                        : tradeCategory === '건축'
-                        ? `${title}: 건축법 시행령 제46조 방화구획 내화성능 2시간 방화문 표기 및 준불연 단열재 스펙 재확인.`
-                        : tradeCategory === '건축기계'
-                        ? `${title}: 방화구획 관통부 방화댐퍼(FD) 표기 누락 및 급탕 순환 펌프 양정 수치 보정 필요.`
-                        : tradeCategory === '건축전기'
-                        ? `${title}: 변전실 방폭구역 등급 지정 및 소방 비상전원 연동 조도(300 Lux) 확보 필요.`
-                        : `${title}: 소방시설법 자동화재탐지설비 감지기 감응거리 초과 및 비상전원 수신반 연동 점검.`}
-                    </p>
-                  </div>
+                  <p className="text-red-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-red-600 shadow-2xs">
+                    {tradeCategory === '토목'
+                      ? `${title}: KDS 11 10 00 / KDS 21 30 00 기준 H-Pile 흙막이 앵커 긴장력 부족 및 사면 토압 검토 필요.`
+                      : tradeCategory === '건축'
+                      ? `${title}: 건축법 시행령 제34조 직통계단 보행거리 38.5m(법정 30m 이하) 초과 및 피난동선 보정 지적.`
+                      : tradeCategory === '건축기계'
+                      ? `${title}: KDS 31 25 10 공조 급기 덕트(SA) 풍속 8.5m/s 과다(기준 6.0m/s 이하) 및 소음기 설치 필요.`
+                      : tradeCategory === '건축전기'
+                      ? `${title}: KEC(한국전기설비규정) 230 수전반 메인 케이블 허용전류 및 전선관 충전율 40% 초과 지적.`
+                      : `${title}: NFTC 102/103 화재안전기술기준 스프링클러 헤드 살수반경(R=2.3m) 미달 및 가지배관 직경 보정 요구.`}
+                  </p>
                 </div>
-              )}
+
+                {/* Red Law & Error Violation Box 2 */}
+                <div className="bg-amber-50/90 border-2 border-amber-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
+                  <div className="flex items-center justify-between border-b border-amber-200 pb-1.5 font-bold text-amber-900">
+                    <span className="flex items-center gap-1.5 text-xs">
+                      🔴 [빨간색 마크업 2] {tradeCategory} 공종 안전성 & 법규 준수 재검토 필요
+                    </span>
+                    <span className="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
+                      WARNING
+                    </span>
+                  </div>
+                  <p className="text-amber-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-amber-500 shadow-2xs">
+                    {tradeCategory === '토목'
+                      ? `${title}: 지하안전관리에 관한 특별법 및 KDS 44 50 00 우수관 구배(1/150) 부족 및 계측기(Inclinometer) 누락.`
+                      : tradeCategory === '건축'
+                      ? `${title}: 건축법 시행령 제46조 방화구획 내화성능 2시간 방화문 표기 및 준불연 단열재 스펙 재확인.`
+                      : tradeCategory === '건축기계'
+                      ? `${title}: 방화구획 관통부 방화댐퍼(FD) 표기 누락 및 급탕 순환 펌프 양정 수치 보정 필요.`
+                      : tradeCategory === '건축전기'
+                      ? `${title}: 변전실 방폭구역 등급 지정 및 소방 비상전원 연동 조도(300 Lux) 확보 필요.`
+                      : `${title}: 소방시설법 자동화재탐지설비 감지기 감응거리 초과 및 비상전원 수신반 연동 점검.`}
+                  </p>
+                </div>
+              </div>
 
               {/* Red Markups Overlay on PDF Stage */}
               {showMarkupLayer &&

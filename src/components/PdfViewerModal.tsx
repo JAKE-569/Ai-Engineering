@@ -200,28 +200,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
                 </div>
 
                 {/* PDF Document Body / Image Rendering */}
-                {isRealPdf ? (
-                  <div className="relative w-full h-[580px] rounded border border-gray-300 mt-4 overflow-hidden shadow-inner">
-                    <iframe
-                      src={fileDataUrl}
-                      className="w-full h-full rounded"
-                      title="Real PDF View"
-                    />
-                    {/* Floating Red Markups Overlay on top of real PDF embed */}
-                    {showMarkups && (
-                      <div className="absolute inset-0 pointer-events-none z-30">
-                        <div className="absolute top-[25%] left-[35%] pointer-events-auto bg-red-600 text-white text-[11px] font-mono font-bold px-3 py-1.5 rounded-full shadow-2xl border-2 border-white flex items-center gap-1.5 animate-bounce">
-                          <MapPin className="w-4 h-4 text-white" />
-                          <span>🔴 [빨간색 주석 1] {tradeCategory} 설계 오류 및 법규 위반</span>
-                        </div>
-                        <div className="absolute top-[55%] left-[60%] pointer-events-auto bg-red-700 text-white text-[11px] font-mono font-bold px-3 py-1.5 rounded-full shadow-2xl border-2 border-white flex items-center gap-1.5">
-                          <MapPin className="w-4 h-4 text-white" />
-                          <span>🔴 [빨간색 주석 2] 안전거리 및 피난구역 보정 요구</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : fileDataUrl && fileDataUrl.startsWith('data:image/') ? (
+                {fileDataUrl && fileDataUrl.startsWith('data:image/') ? (
                   <div className="my-6 relative border border-gray-200 rounded-lg overflow-hidden flex justify-center bg-gray-50 shadow-inner">
                     <img
                       src={fileDataUrl}

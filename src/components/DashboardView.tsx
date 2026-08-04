@@ -359,8 +359,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 cadUrl={selectedItem.cadUrl}
                 drawingTitle={selectedItem.drawingTitle || selectedItem.fileName}
                 drawingNumber={selectedItem.drawingNumber || 'DWG-SCAN'}
+                docCategory={selectedItem.docCategory || '도면'}
+                tradeCategory={selectedItem.tradeCategory || '소방'}
                 scale={selectedItem.scale || '1 : 100'}
                 fileName={selectedItem.fileName}
+                ocrBlocks={selectedItem.ocrBlocks}
+                markups={selectedItem.markups}
                 className="w-full h-full"
                 maxHeight="460px"
               />
