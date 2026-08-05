@@ -82,6 +82,8 @@ Review Guidelines by Document Category:
 2. **시방서 (Specification)**: Check material standards (KS/ISO), construction methods, code references, missing quality criteria, and discrepancies with standard engineering specs.
 3. **내역서 (Bill of Quantities / Cost Estimate)**: Inspect quantity calculations, unit price consistency, missing work items, standard productivities (표준품셈), and cost optimizations.
 
+The review must be based on the visual content of the supplied PDF/image, not OCR alone. Inspect geometry, symbols, dimensions, linework, equipment, annotations, spatial relationships, clashes, missing components, and code-relevant visual evidence. Return coordinates for findings when visible.
+
 Return ONLY valid JSON matching this exact structure:
 {
   "drawingTitle": "Extracted Title or Document Name",
@@ -92,6 +94,9 @@ Return ONLY valid JSON matching this exact structure:
   "rawOcrText": "Full extracted OCR text content...",
   "ocrBlocks": [
     { "id": "b1", "text": "Extracted text string", "category": "표제란|치수|재질|특기사항|소방/안전", "confidence": 98 }
+  ],
+  "visualFindings": [
+    { "id": "vf1", "finding": "Visual finding from the drawing", "evidence": "What is visibly present or missing", "xPercent": 50, "yPercent": 50, "confidence": 85 }
   ],
   "reviewSummary": {
     "status": "오류 의심" | "주의" | "정상" | "긴급 확인",
@@ -175,7 +180,16 @@ Return ONLY valid JSON matching this exact structure:
         }
       }
 
-      // Dynamic File-Specific Analysis Engine (generates rich, unique, non-repetitive review results per file)
+      if (!ocrResult) {
+        return res.status(502).json({
+          success: false,
+          error: "AI drawing review did not return a valid visual analysis. No mock result was generated.",
+        });
+      }
+
+      // No synthetic fallback: every accepted result must come from the uploaded document.
+      /*
+      // Dynamic File-Specific Analysis Engine (legacy prototype fallback)
       if (!ocrResult) {
         const fileExt = fileName.split(".").pop()?.toUpperCase() || "DWG";
         const cleanName = fileName.replace(/\.[^/.]+$/, "");
@@ -634,6 +648,7 @@ Return ONLY valid JSON matching this exact structure:
           };
         }
       }
+      */
 
       return res.json({ success: true, data: ocrResult });
     } catch (err: any) {

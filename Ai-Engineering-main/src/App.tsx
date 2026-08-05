@@ -35,11 +35,11 @@ export default function App() {
   // Domain Datasets initialized from empty lists (sample drawings removed for real user upload)
   const [projects] = useState<Project[]>(INITIAL_PROJECTS);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('POSCO-PLANT-01');
-  const [reviewItems, setReviewItems] = useState<ReviewItem[]>(INITIAL_REVIEW_ITEMS);
-  const [safetyItems, setSafetyItems] = useState<SafetyItem[]>(INITIAL_SAFETY_ITEMS);
-  const [designErrors, setDesignErrors] = useState<DesignErrorItem[]>(INITIAL_DESIGN_ERRORS);
-  const [veItems, setVeItems] = useState<VeItem[]>(INITIAL_VE_ITEMS);
-  const [uploadFiles, setUploadFiles] = useState<UploadFile[]>(INITIAL_UPLOAD_FILES);
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [safetyItems, setSafetyItems] = useState<SafetyItem[]>([]);
+  const [designErrors, setDesignErrors] = useState<DesignErrorItem[]>([]);
+  const [veItems, setVeItems] = useState<VeItem[]>([]);
+  const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
 
   // Supabase Configuration State
   const [supabaseConfig, setSupabaseConfigState] = useState<SupabaseConfig>(getSupabaseConfig());
@@ -48,20 +48,6 @@ export default function App() {
   const [isDeployModalOpen, setIsDeployModalOpen] = useState<boolean>(false);
   const [cadModalErrorItem, setCadModalErrorItem] = useState<DesignErrorItem | null>(null);
   const [ocrModalFile, setOcrModalFile] = useState<UploadFile | ReviewItem | null>(null);
-
-  // Load data from Supabase if connected
-  useEffect(() => {
-    async function loadSupabaseData() {
-      if (supabaseConfig.isConnected) {
-        initSupabase(supabaseConfig.url, supabaseConfig.anonKey);
-        const data = await fetchReviewItemsFromSupabase();
-        if (data && data.length > 0) {
-          setReviewItems(data);
-        }
-      }
-    }
-    loadSupabaseData();
-  }, [supabaseConfig]);
 
   const handleSaveSupabaseConfig = (url: string, anonKey: string) => {
     saveSupabaseConfig(url, anonKey);

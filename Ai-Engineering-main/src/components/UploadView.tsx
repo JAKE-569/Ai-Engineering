@@ -134,12 +134,18 @@ export const UploadView: React.FC<UploadViewProps> = ({
           const data = await response.json();
           if (data.success && data.data) {
             apiResult = data.data;
+          } else {
+            throw new Error(data.error || 'AI visual drawing review failed');
           }
         } catch (err) {
           console.error('API OCR Review call error:', err);
         }
 
-        // Generate metadata specific to this uploaded file
+        if (!apiResult) {
+          throw new Error('No visual review result was returned for the uploaded drawing');
+        }
+
+        // Use only metadata returned from the uploaded document review.
         const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
         const drawingTitle = apiResult?.drawingTitle || `${cleanTitle} (${selectedTradeCategory} ${selectedDocCategory})`;
         const drawingNumber =
