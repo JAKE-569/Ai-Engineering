@@ -203,7 +203,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           tradeCategory: selectedTradeCategory,
           sizeMB,
           progress: 100,
-          status: apiResult ? '분석 완료' : '검토 대기 (AI 미응답)',
+          status: apiResult ? '분석 완료' : '오류',
           uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           fileDataUrl,
           drawingTitle,
