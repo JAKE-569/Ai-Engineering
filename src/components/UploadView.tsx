@@ -41,7 +41,7 @@ interface UploadViewProps {
 }
 
 const DOC_CATEGORIES: { id: DocCategory; label: string; desc: string; icon: string }[] = [
-  { id: '도면', label: '도면 (Drawing)', desc: 'CAD / PDF 평면도, 단면도, 계통도', icon: 'architecture' },
+  { id: '도면', label: '도면 (Drawing)', desc: 'PDF 평면도, 단면도, 계통도', icon: 'architecture' },
   { id: '시방서', label: '시방서 (Specification)', desc: '공사 시방서, 자재 표준 스펙', icon: 'description' },
   { id: '내역서', label: '내역서 (BoQ / Cost)', desc: '공사비 산출 내역서, 일위대가', icon: 'table_chart' },
 ];

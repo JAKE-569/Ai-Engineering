@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 import {
   ZoomIn,
   ZoomOut,
@@ -361,177 +362,20 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
       <div className="relative flex-1 flex items-center justify-center p-3 overflow-auto bg-[#0a111e]">
         {/* Render PDF Document if uploaded format is PDF */}
         {isPdfData ? (
-          <div
-            className="w-full h-full flex flex-col items-center justify-center transition-transform duration-150 relative p-2"
-            style={{ transform: `scale(${zoomLevel})` }}
-          >
-            {/* PDF Sheet Box & Viewer Stage */}
-            <div className="relative w-full max-w-4xl min-h-[500px] bg-white text-gray-900 rounded-lg shadow-2xl border border-gray-300 p-6 flex flex-col justify-between overflow-hidden">
-              {/* PDF Header Stamp & Red Markups Indicator */}
-              <div className="border-b-2 border-red-600 pb-3 mb-3 flex flex-wrap items-center justify-between font-mono text-xs gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="bg-red-600 text-white font-bold px-2.5 py-1 rounded text-xs tracking-wider flex items-center gap-1 shadow-sm">
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                    PDF 미리보기
-                  </span>
-                  <span className="font-bold text-[#000d5f] text-sm">{title}</span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded border border-red-300 flex items-center gap-1">
-                    🔴 빨간색 마크업 주석 ({effectiveMarkups.length}개 지적)
-                  </span>
-                  <span className="text-gray-500 font-mono">{dwgNo}</span>
-                </div>
-              </div>
-
-              {/* PDF Document Engineering Blueprint Canvas Stage */}
-              <div className="relative w-full h-[400px] rounded-lg border-2 border-[#000d5f]/20 bg-[#091124] overflow-hidden shadow-inner flex flex-col justify-between p-2 font-mono select-none">
-                {/* Real PDF Embed or Blueprint Vector Stage */}
-                {blobUrl || (rawUrl && (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:') || rawUrl.toLowerCase().endsWith('.pdf'))) ? (
-                  <iframe
-                    src={blobUrl || rawUrl}
-                    className="absolute inset-0 w-full h-full border-0 bg-white"
-                    title={`${tradeCategory} PDF Drawing Preview`}
-                  />
-                ) : (
-                  <svg className="absolute inset-0 w-full h-full opacity-25 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" strokeWidth="0.5" />
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid)" />
-                  </svg>
-                )}
-
-                {/* Top Info Banner inside Blueprint */}
-                <div className="z-10 bg-slate-900/90 border border-slate-700 backdrop-blur-md p-2 rounded-md flex items-center justify-between shadow-lg text-xs">
-                  <div className="flex items-center gap-2 text-slate-200">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-                    <span className="font-bold text-cyan-300">[{tradeCategory}] {docCategory} PDF 도면</span>
-                    <span className="text-slate-300 text-[11px] font-sans">({fileName || title})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded">
-                      🔴 MARKUP ACTIVE
-                    </span>
-                    <span className="text-cyan-400 font-mono text-[11px]">{scale}</span>
-                  </div>
-                </div>
-
-                {/* Interactive Red Markup Overlay Pins */}
-                {showMarkupLayer && effectiveMarkups.map((markup, idx) => {
-                  const isActive = activeMarkupId === markup.id;
-                  return (
-                    <div
-                      key={markup.id || idx}
-                      className="absolute z-20 cursor-pointer transition-transform hover:scale-110 group"
-                      style={{
-                        left: `${Math.max(10, Math.min(85, markup.xPercent || 25 + idx * 35))}%`,
-                        top: `${Math.max(15, Math.min(75, markup.yPercent || 30 + idx * 25))}%`,
-                      }}
-                      onClick={() => setActiveMarkupId(isActive ? null : markup.id)}
-                    >
-                      {/* Pulsing Target Halo */}
-                      <span className="absolute -inset-2 rounded-full bg-red-500/40 animate-ping"></span>
-
-                      {/* Red Pin Badge */}
-                      <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-red-600 text-white font-black text-xs shadow-lg border-2 border-white ring-2 ring-red-500/50">
-                        🔴 {idx + 1}
-                      </div>
-
-                      {/* Tooltip Hover / Active Callout Card */}
-                      <div className={`absolute bottom-10 left-1/2 -translate-x-1/2 w-72 bg-slate-950 border-2 border-red-500 text-white p-3 rounded-lg shadow-2xl z-30 font-sans ${isActive ? 'block' : 'hidden group-hover:block'}`}>
-                        <div className="flex items-center justify-between border-b border-red-500/40 pb-1 mb-1.5 font-bold text-xs text-red-400">
-                          <span>{markup.title || `🔴 빨간색 마크업 지적 ${idx + 1}`}</span>
-                          <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded">{markup.severity || 'CRITICAL'}</span>
-                        </div>
-                        <p className="text-[11px] text-slate-200 leading-snug">{markup.comment}</p>
-                        {markup.codeClause && (
-                          <div className="mt-1.5 pt-1 border-t border-slate-800 text-[10px] font-mono text-cyan-300">
-                            적용기준: {markup.codeClause}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Blueprint Title Block (Bottom Right) */}
-                <div className="z-10 self-end bg-slate-950/95 border border-cyan-500/40 p-2.5 rounded text-[10px] text-slate-300 space-y-0.5 shadow-xl min-w-[220px]">
-                  <div className="font-bold text-cyan-400 text-xs border-b border-cyan-800 pb-1 mb-1 flex justify-between">
-                    <span>POSCO PLANT AI DRAWING</span>
-                    <span className="text-red-400 font-bold">INSPECTED</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">DRAWING NO:</span>
-                    <span className="font-mono text-white font-bold">{dwgNo}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">TRADE:</span>
-                    <span className="text-amber-300 font-bold">{tradeCategory} ({docCategory})</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">SCALE:</span>
-                    <span className="font-mono text-white">{scale}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">STANDARDS:</span>
-                    <span className="text-emerald-400 font-bold">KDS / KEC / NFTC</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Red Markups Overlay on PDF Stage */}
-              {showMarkupLayer &&
-                effectiveMarkups.map((mk, idx) => (
-                  <div
-                    key={`pdf-mk-${mk.id || idx}`}
-                    style={{ top: `${mk.yPercent}%`, left: `${mk.xPercent}%` }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveMarkupId(activeMarkupId === mk.id ? null : mk.id);
-                    }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer z-40 group"
-                  >
-                    {/* Pulsing Red Pin */}
-                    <div className="relative flex items-center justify-center">
-                      <span className="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-red-500 opacity-75"></span>
-                      <div className="relative inline-flex rounded-full h-8 w-8 bg-red-600 text-white font-mono font-bold text-xs items-center justify-center border-2 border-white shadow-2xl hover:scale-110 transition-transform">
-                        {idx + 1}
-                      </div>
-                    </div>
-
-                    {/* Red Annotation Callout Box */}
-                    <div
-                      className={`absolute left-1/2 -translate-x-1/2 mt-2 w-64 p-3 rounded-xl bg-[#1c0404]/95 text-white border-2 border-red-500 shadow-2xl text-[11px] font-sans z-50 transition-all ${
-                        activeMarkupId === mk.id ? 'opacity-100 scale-100' : 'opacity-95 group-hover:opacity-100'
-                      }`}
-                    >
-                      <div className="font-bold text-red-200 border-b border-white/20 pb-1 mb-1 flex justify-between items-center">
-                        <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-                          {mk.title}
-                        </span>
-                        {mk.codeClause && (
-                          <span className="text-[9px] bg-red-900 text-red-100 px-1.5 py-0.5 rounded font-mono border border-red-400">
-                            {mk.codeClause}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-red-100 text-[10px] leading-relaxed bg-red-950/80 p-2 rounded border-l-2 border-red-400 mt-1">
-                        🔴 [빨간색 주석] {mk.comment}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-
-              {/* PDF Footer Stamp */}
-              <div className="mt-3 pt-2 border-t border-gray-300 flex justify-between items-center text-[10px] font-mono text-gray-500">
-                <span>POSCO AI PDF DRAWING VERIFICATION ENGINE</span>
-                <span>STATUS: RED MARKUPS ACTIVE</span>
-              </div>
-            </div>
+          <div className="w-full h-full flex flex-col items-center justify-center relative p-2">
+            <PdfCanvasRenderer
+              pdfSource={blobUrl || rawUrl}
+              tradeCategory={tradeCategory}
+              docCategory={docCategory}
+              drawingTitle={title}
+              drawingNumber={dwgNo}
+              scale={scale}
+              markups={effectiveMarkups}
+              showMarkupLayer={showMarkupLayer}
+              activeMarkupId={activeMarkupId}
+              onSelectMarkup={(id) => setActiveMarkupId(id)}
+              className="w-full h-[550px]"
+            />
           </div>
         ) : isImageMime ? (
           /* Render Uploaded Real Image with Zoom & OCR / Markup overlays */

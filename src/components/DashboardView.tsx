@@ -218,7 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 검토할 업로드 도면이 없습니다.
               </h3>
               <p className="font-body text-xs text-[#454651] mt-1 max-w-md mx-auto">
-                '도면 업로드' 메뉴에서 도면 이미지나 CAD/PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
+                '도면 업로드' 메뉴에서 도면 이미지나 PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
               </p>
             </div>
             <button
