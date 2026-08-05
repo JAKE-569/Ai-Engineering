@@ -41,7 +41,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   "markups":[{"id":"m1","xPercent":50,"yPercent":50,"title":"string","comment":"string","codeClause":"string","severity":"CRITICAL|WARNING|INFO"}],
   "safetyItems":[], "veItems":[]
 }`;
-    if (effectiveMime === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+    // PDFs are converted to PNG in the browser before reaching this endpoint.
+    // Reject only an actual PDF payload, not a converted PDF filename.
+    if (effectiveMime === 'application/pdf') {
       return res.status(415).json({ error: 'NVIDIA Vision review requires an image page. Export the PDF page as PNG/JPEG and upload the image.' });
     }
     const response = await client.chat.completions.create({
