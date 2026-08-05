@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 
 const stripDataUrl = (value: string) => value.replace(/^data:[^;]+;base64,/, '');
 
@@ -18,14 +18,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!fileName || !base64Data) {
     return res.status(400).json({ error: 'fileName and base64Data are required' });
   }
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(503).json({ error: 'GEMINI_API_KEY is not configured in Vercel' });
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(503).json({ error: 'OPENAI_API_KEY is not configured in Vercel' });
   }
 
   try {
     const cleanBase64 = stripDataUrl(base64Data);
     const effectiveMime = mimeType || 'application/pdf';
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const prompt = `You are a senior Korean plant engineering drawing reviewer. Review the supplied PDF/image visually, not OCR alone. Inspect geometry, dimensions, symbols, linework, equipment, pipes/cables, spatial relationships, clashes, missing components, and code-relevant evidence. Also extract OCR text. Return only valid JSON with this shape:
 {
   "drawingTitle":"string", "drawingNumber":"string", "scale":"string",
@@ -37,15 +37,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   "markups":[{"id":"m1","xPercent":50,"yPercent":50,"title":"string","comment":"string","codeClause":"string","severity":"CRITICAL|WARNING|INFO"}],
   "safetyItems":[], "veItems":[]
 }`;
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: { parts: [{ inlineData: { mimeType: effectiveMime, data: cleanBase64 } }, { text: prompt }] },
-      config: { responseMimeType: 'application/json' },
+    const isPdf = effectiveMime === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+    const content = isPdf
+      ? [
+          { type: 'input_file', filename: fileName, file_data: base64Data },
+          { type: 'input_text', text: prompt },
+        ]
+      : [
+          { type: 'input_image', image_url: base64Data, detail: 'high' },
+          { type: 'input_text', text: prompt },
+        ];
+    const response = await client.responses.create({
+      model: 'gpt-4o-mini',
+      input: [{ role: 'user', content } as any],
+      text: { format: { type: 'json_object' } },
     });
-    if (!response.text) return res.status(502).json({ error: 'Gemini returned an empty review' });
-    return res.status(200).json({ success: true, data: JSON.parse(response.text.trim()) });
+    if (!response.output_text) return res.status(502).json({ error: 'OpenAI returned an empty review' });
+    return res.status(200).json({ success: true, data: JSON.parse(response.output_text.trim()) });
   } catch (error) {
-    console.error('Gemini drawing review failed:', error);
-    return res.status(502).json({ error: 'Gemini drawing review failed' });
+    console.error('OpenAI drawing review failed:', error);
+    return res.status(502).json({ error: 'OpenAI drawing review failed' });
   }
 }
