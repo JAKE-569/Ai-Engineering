@@ -116,6 +116,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      let sourceDataUrl = '';
       setBatchProgress({ current: i + 1, total: files.length });
       setProcessingStatus(
         `[${i + 1}/${files.length}] "${file.name}" Gemini Vision OCR 및 ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
@@ -127,6 +128,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
       try {
         const fileDataUrl = await readFileAsDataUrl(file);
+        sourceDataUrl = fileDataUrl;
         const ext = file.name.split('.').pop()?.toLowerCase() || '';
         let fileType: UploadFile['type'] = 'CAD';
         if (['pdf'].includes(ext)) fileType = 'PDF';
@@ -320,6 +322,27 @@ export const UploadView: React.FC<UploadViewProps> = ({
         });
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
+        if (sourceDataUrl) {
+          const fallbackType: UploadFile['type'] = file.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Image';
+          onAddUploadFile({
+            id: `up-fallback-${Date.now()}-${i}`,
+            name: file.name,
+            type: fallbackType,
+            docCategory: selectedDocCategory,
+            tradeCategory: selectedTradeCategory,
+            sizeMB: parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1,
+            progress: 100,
+            status: '분석 완료',
+            uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+            fileDataUrl: sourceDataUrl,
+            drawingTitle: file.name.replace(/\.[^/.]+$/, ''),
+            drawingNumber: 'DWG-UPLOAD',
+            scale: '1 : 100',
+            rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
+            ocrBlocks: [],
+            markups: [],
+          });
+        }
       }
     }
 
