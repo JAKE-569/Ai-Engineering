@@ -29,17 +29,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [
-        { inlineData: { mimeType, data: stripDataUrl(base64Data) } },
-        { text: prompt },
-      ] },
-      config: { responseMimeType: 'application/json', temperature: 0.1 },
-    });
-    const output = response.text?.trim();
-    if (!output) return res.status(502).json({ error: 'Gemini returned an empty review' });
-    return res.status(200).json({ success: true, data: JSON.parse(output) });
+    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    let lastError: any = null;
+    for (const model of models) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: { parts: [
+            { inlineData: { mimeType, data: stripDataUrl(base64Data) } },
+            { text: prompt },
+          ] },
+          config: { responseMimeType: 'application/json', temperature: 0.1 },
+        });
+        const output = response.text?.trim();
+        if (!output) throw new Error(`${model} returned an empty review`);
+        return res.status(200).json({ success: true, model, data: JSON.parse(output) });
+      } catch (error: any) {
+        lastError = error;
+        const status = Number(error?.status || error?.response?.status);
+        if (model === models[0] && (status === 429 || status >= 500)) continue;
+        break;
+      }
+    }
+    const status = Number(lastError?.status || lastError?.response?.status);
+    if (status === 429) return res.status(429).json({ error: 'Gemini model rate limits exceeded. Please retry after quota refresh.' });
+    throw lastError || new Error('Gemini returned no review');
   } catch (error: any) {
     const status = Number(error?.status || error?.response?.status);
     if (status === 429) return res.status(429).json({ error: 'Gemini API rate limit exceeded. Please retry after the quota refresh.' });
