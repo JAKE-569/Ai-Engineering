@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ZoomIn,
   ZoomOut,
@@ -34,6 +34,33 @@ interface DrawingCanvasPreviewProps {
   maxHeight?: string;
 }
 
+function getBlobUrlFromDataUrl(dataUrl: string): string | null {
+  if (!dataUrl) return null;
+  if (dataUrl.startsWith('blob:') || dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
+    return dataUrl;
+  }
+  try {
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return null;
+    let mime = 'application/pdf';
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    if (mimeMatch && mimeMatch[1] && mimeMatch[1] !== 'application/octet-stream') {
+      mime = mimeMatch[1];
+    }
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const blob = new Blob([u8arr], { type: mime });
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    console.error('Failed to convert data URL to Blob URL:', err);
+    return null;
+  }
+}
+
 export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   fileDataUrl,
   cadUrl,
@@ -57,15 +84,35 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   const [showMarkupLayer, setShowMarkupLayer] = useState<boolean>(true);
   const [activeMarkupId, setActiveMarkupId] = useState<string | null>(null);
   const [imageError, setImageError] = useState<boolean>(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   const rawUrl = fileDataUrl || cadUrl;
 
-  // Check data format
-  const isPdfData =
-    rawUrl &&
-    (rawUrl.startsWith('data:application/pdf') ||
-      rawUrl.toLowerCase().endsWith('.pdf') ||
-      rawUrl.includes('type=pdf'));
+  // Generate safe Blob URL for iframe embedding and popup viewing
+  useEffect(() => {
+    if (rawUrl && rawUrl.startsWith('data:')) {
+      const created = getBlobUrlFromDataUrl(rawUrl);
+      setBlobUrl(created);
+      return () => {
+        if (created && created.startsWith('blob:')) {
+          URL.revokeObjectURL(created);
+        }
+      };
+    } else if (rawUrl && (rawUrl.startsWith('blob:') || rawUrl.startsWith('http'))) {
+      setBlobUrl(rawUrl);
+    } else {
+      setBlobUrl(null);
+    }
+  }, [rawUrl]);
+
+  // Check data format (handles .pdf files, base64 PDF data, and drawing category items)
+  const isPdfData = Boolean(
+    (fileName && fileName.toLowerCase().endsWith('.pdf')) ||
+    (fileDataUrl && fileDataUrl.includes('application/pdf')) ||
+    (cadUrl && cadUrl.toLowerCase().endsWith('.pdf')) ||
+    (rawUrl && (rawUrl.startsWith('data:application/pdf') || rawUrl.toLowerCase().endsWith('.pdf') || rawUrl.includes('type=pdf'))) ||
+    docCategory === '도면'
+  );
 
   const isImageMime =
     rawUrl &&
@@ -81,6 +128,83 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
 
   const title = drawingTitle || fileName || `${tradeCategory} ${docCategory} 정밀 검토도`;
   const dwgNo = drawingNumber || `DWG-${tradeCategory.substring(0, 2).toUpperCase()}-2024-001`;
+
+  const handleOpenNewWindow = () => {
+    const w = window.open('', '_blank');
+    if (w) {
+      const markupHtml = effectiveMarkups.map((m, idx) => `
+        <div style="background:#fef2f2; border:2px solid #ef4444; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#991b1b; margin-bottom:6px;">
+            <span style="font-size:13px;">🔴 [빨간색 주석 ${idx + 1}] ${m.title || '기술기준 및 시공 상세 지적'}</span>
+            <span style="background:#dc2626; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-family:monospace;">${m.severity || 'CRITICAL'}</span>
+          </div>
+          <div style="color:#7f1d1d; font-size:12px; line-height:1.5; background:white; padding:10px; border-radius:6px; border-left:4px solid #dc2626; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+            ${m.comment}
+          </div>
+          ${m.codeClause ? `<div style="font-size:11px; color:#991b1b; margin-top:6px; font-family:monospace;"><strong>적용 법규/기술기준:</strong> ${m.codeClause}</div>` : ''}
+        </div>
+      `).join('');
+
+      w.document.write(`
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+          <meta charset="utf-8">
+          <title>[POSCO AI] ${title} - PDF 도면 및 마크업 검토 보고서</title>
+          <style>
+            body { margin: 0; padding: 24px; background: #0b1329; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; }
+            .card { background: #1e293b; border: 2px solid #3b82f6; border-radius: 1rem; max-width: 900px; width: 100%; padding: 2rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #ef4444; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+            .tag { background: #ef4444; color: white; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: bold; font-size: 0.75rem; font-family: monospace; }
+            h1 { margin: 0.5rem 0 0.25rem 0; font-size: 1.35rem; color: #60a5fa; }
+            .meta { font-size: 0.8rem; color: #94a3b8; }
+            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #0f172a; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-size: 0.8rem; }
+            .grid-label { color: #64748b; font-size: 0.7rem; display: block; margin-bottom: 2px; }
+            .grid-val { font-weight: bold; color: #e2e8f0; font-family: monospace; }
+            .section-title { color: #fca5a5; font-size: 0.95rem; font-weight: bold; margin: 1.5rem 0 0.75rem 0; }
+            .btn-print { background: #2563eb; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; }
+            .btn-print:hover { background: #1d4ed8; }
+            @media print {
+              body { background: white; color: black; }
+              .card { box-shadow: none; border: none; background: white; color: black; }
+              .btn-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div>
+                <span class="tag">POSCO PLANT AI ENGINEERING REVIEW</span>
+                <h1>${title}</h1>
+                <div class="meta">도서구분: ${docCategory} | 공종: ${tradeCategory} | 축척: ${scale}</div>
+              </div>
+              <div style="text-align: right;">
+                <button class="btn-print" onclick="window.print()">🖨️ 보고서 인쇄 / PDF 저장</button>
+                <div style="font-family: monospace; font-size: 11px; color: #94a3b8; margin-top: 8px;">${dwgNo}</div>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div><span class="grid-label">파일명</span><span class="grid-val">${fileName || title}</span></div>
+              <div><span class="grid-label">공종</span><span class="grid-val">${tradeCategory}</span></div>
+              <div><span class="grid-label">도서분류</span><span class="grid-val">${docCategory}</span></div>
+              <div><span class="grid-label">기술기준</span><span class="grid-val">KDS/KEC/NFTC</span></div>
+            </div>
+
+            <div class="section-title">🔴 빨간색 마크업 지적 및 법규 준수 검토결과 (${effectiveMarkups.length}건)</div>
+            ${markupHtml}
+
+            <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #334155; text-align: center; font-family: monospace; font-size: 0.7rem; color: #64748b;">
+              POSCO PLANT ENGINEERING DIVISION - AI AUTOMATED DRAWING REVIEW
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+      w.document.close();
+    }
+  };
 
   // Default fallback markups if none provided
   const effectiveMarkups: ReviewMarkup[] =
@@ -162,6 +286,17 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
 
         {/* View Toggles & Zoom Controls */}
         <div className="flex items-center gap-2">
+          {isPdfData && (
+            <button
+              onClick={handleOpenNewWindow}
+              className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="PDF 원본 새 탭에서 열기"
+            >
+              <FileCheck className="w-3.5 h-3.5" />
+              PDF 원본 새 탭 보기
+            </button>
+          )}
+
           <div className="flex items-center gap-1 bg-[#131d31] px-2 py-1 rounded border border-white/10">
             <button
               onClick={() => setShowMarkupLayer(!showMarkupLayer)}
@@ -249,70 +384,101 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                 </div>
               </div>
 
-              {/* Interactive PDF Drawing Blueprint Canvas */}
-              <div className="w-full h-[390px] bg-gray-50 border border-gray-200 rounded-lg p-5 relative overflow-auto font-mono text-xs text-gray-800 space-y-4 shadow-inner">
-                {/* PDF Document Summary Block */}
-                <div className="bg-white p-3.5 rounded-md border border-gray-300 shadow-xs flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-sm text-[#000d5f] block flex items-center gap-1.5">
-                      <FileCheck className="w-4 h-4 text-emerald-600" />
-                      📄 PDF 엔지니어링 도면 스캔 분석 완료
-                    </span>
-                    <p className="text-[11px] text-gray-600 mt-0.5 font-sans">
-                      공종: <strong className="text-blue-900">{tradeCategory}</strong> | 분류:{' '}
-                      <strong>{docCategory}</strong> | 축척: <strong>{scale}</strong> | 엔지니어링 기준:{' '}
-                      <strong className="text-emerald-800">KDS / KEC / NFTC 준수</strong>
-                    </p>
+              {/* PDF Document Engineering Blueprint Canvas Stage */}
+              <div className="relative w-full h-[400px] rounded-lg border-2 border-[#000d5f]/20 bg-[#091124] overflow-hidden shadow-inner flex flex-col justify-between p-2 font-mono select-none">
+                {/* Real PDF Embed or Blueprint Vector Stage */}
+                {blobUrl || (rawUrl && (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:') || rawUrl.toLowerCase().endsWith('.pdf'))) ? (
+                  <iframe
+                    src={blobUrl || rawUrl}
+                    className="absolute inset-0 w-full h-full border-0 bg-white"
+                    title={`${tradeCategory} PDF Drawing Preview`}
+                  />
+                ) : (
+                  <svg className="absolute inset-0 w-full h-full opacity-25 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" strokeWidth="0.5" />
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                  </svg>
+                )}
+
+                {/* Top Info Banner inside Blueprint */}
+                <div className="z-10 bg-slate-900/90 border border-slate-700 backdrop-blur-md p-2 rounded-md flex items-center justify-between shadow-lg text-xs">
+                  <div className="flex items-center gap-2 text-slate-200">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span className="font-bold text-cyan-300">[{tradeCategory}] {docCategory} PDF 도면</span>
+                    <span className="text-slate-300 text-[11px] font-sans">({fileName || title})</span>
                   </div>
-                  <span className="px-3 py-1 bg-red-600 text-white rounded text-[11px] font-bold shadow-xs">
-                    RED MARKUPS ACTIVE
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded">
+                      🔴 MARKUP ACTIVE
+                    </span>
+                    <span className="text-cyan-400 font-mono text-[11px]">{scale}</span>
+                  </div>
                 </div>
 
-                {/* Red Law & Error Violation Box 1 */}
-                <div className="bg-red-50/90 border-2 border-red-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
-                  <div className="flex items-center justify-between border-b border-red-200 pb-1.5 font-bold text-red-900">
-                    <span className="flex items-center gap-1.5 text-xs">
-                      🔴 [빨간색 마크업 1] {tradeCategory} 공종 ({title}) 법규 위반 및 규격 미달 지적
-                    </span>
-                    <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
-                      CRITICAL
-                    </span>
-                  </div>
-                  <p className="text-red-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-red-600 shadow-2xs">
-                    {tradeCategory === '토목'
-                      ? `${title}: KDS 11 10 00 / KDS 21 30 00 기준 H-Pile 흙막이 앵커 긴장력 부족 및 사면 토압 검토 필요.`
-                      : tradeCategory === '건축'
-                      ? `${title}: 건축법 시행령 제34조 직통계단 보행거리 38.5m(법정 30m 이하) 초과 및 피난동선 보정 지적.`
-                      : tradeCategory === '건축기계'
-                      ? `${title}: KDS 31 25 10 공조 급기 덕트(SA) 풍속 8.5m/s 과다(기준 6.0m/s 이하) 및 소음기 설치 필요.`
-                      : tradeCategory === '건축전기'
-                      ? `${title}: KEC(한국전기설비규정) 230 수전반 메인 케이블 허용전류 및 전선관 충전율 40% 초과 지적.`
-                      : `${title}: NFTC 102/103 화재안전기술기준 스프링클러 헤드 살수반경(R=2.3m) 미달 및 가지배관 직경 보정 요구.`}
-                  </p>
-                </div>
+                {/* Interactive Red Markup Overlay Pins */}
+                {showMarkupLayer && effectiveMarkups.map((markup, idx) => {
+                  const isActive = activeMarkupId === markup.id;
+                  return (
+                    <div
+                      key={markup.id || idx}
+                      className="absolute z-20 cursor-pointer transition-transform hover:scale-110 group"
+                      style={{
+                        left: `${Math.max(10, Math.min(85, markup.xPercent || 25 + idx * 35))}%`,
+                        top: `${Math.max(15, Math.min(75, markup.yPercent || 30 + idx * 25))}%`,
+                      }}
+                      onClick={() => setActiveMarkupId(isActive ? null : markup.id)}
+                    >
+                      {/* Pulsing Target Halo */}
+                      <span className="absolute -inset-2 rounded-full bg-red-500/40 animate-ping"></span>
 
-                {/* Red Law & Error Violation Box 2 */}
-                <div className="bg-amber-50/90 border-2 border-amber-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
-                  <div className="flex items-center justify-between border-b border-amber-200 pb-1.5 font-bold text-amber-900">
-                    <span className="flex items-center gap-1.5 text-xs">
-                      🔴 [빨간색 마크업 2] {tradeCategory} 공종 안전성 & 법규 준수 재검토 필요
-                    </span>
-                    <span className="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
-                      WARNING
-                    </span>
+                      {/* Red Pin Badge */}
+                      <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-red-600 text-white font-black text-xs shadow-lg border-2 border-white ring-2 ring-red-500/50">
+                        🔴 {idx + 1}
+                      </div>
+
+                      {/* Tooltip Hover / Active Callout Card */}
+                      <div className={`absolute bottom-10 left-1/2 -translate-x-1/2 w-72 bg-slate-950 border-2 border-red-500 text-white p-3 rounded-lg shadow-2xl z-30 font-sans ${isActive ? 'block' : 'hidden group-hover:block'}`}>
+                        <div className="flex items-center justify-between border-b border-red-500/40 pb-1 mb-1.5 font-bold text-xs text-red-400">
+                          <span>{markup.title || `🔴 빨간색 마크업 지적 ${idx + 1}`}</span>
+                          <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded">{markup.severity || 'CRITICAL'}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-200 leading-snug">{markup.comment}</p>
+                        {markup.codeClause && (
+                          <div className="mt-1.5 pt-1 border-t border-slate-800 text-[10px] font-mono text-cyan-300">
+                            적용기준: {markup.codeClause}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Blueprint Title Block (Bottom Right) */}
+                <div className="z-10 self-end bg-slate-950/95 border border-cyan-500/40 p-2.5 rounded text-[10px] text-slate-300 space-y-0.5 shadow-xl min-w-[220px]">
+                  <div className="font-bold text-cyan-400 text-xs border-b border-cyan-800 pb-1 mb-1 flex justify-between">
+                    <span>POSCO PLANT AI DRAWING</span>
+                    <span className="text-red-400 font-bold">INSPECTED</span>
                   </div>
-                  <p className="text-amber-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-amber-500 shadow-2xs">
-                    {tradeCategory === '토목'
-                      ? `${title}: 지하안전관리에 관한 특별법 및 KDS 44 50 00 우수관 구배(1/150) 부족 및 계측기(Inclinometer) 누락.`
-                      : tradeCategory === '건축'
-                      ? `${title}: 건축법 시행령 제46조 방화구획 내화성능 2시간 방화문 표기 및 준불연 단열재 스펙 재확인.`
-                      : tradeCategory === '건축기계'
-                      ? `${title}: 방화구획 관통부 방화댐퍼(FD) 표기 누락 및 급탕 순환 펌프 양정 수치 보정 필요.`
-                      : tradeCategory === '건축전기'
-                      ? `${title}: 변전실 방폭구역 등급 지정 및 소방 비상전원 연동 조도(300 Lux) 확보 필요.`
-                      : `${title}: 소방시설법 자동화재탐지설비 감지기 감응거리 초과 및 비상전원 수신반 연동 점검.`}
-                  </p>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">DRAWING NO:</span>
+                    <span className="font-mono text-white font-bold">{dwgNo}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">TRADE:</span>
+                    <span className="text-amber-300 font-bold">{tradeCategory} ({docCategory})</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">SCALE:</span>
+                    <span className="font-mono text-white">{scale}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">STANDARDS:</span>
+                    <span className="text-emerald-400 font-bold">KDS / KEC / NFTC</span>
+                  </div>
                 </div>
               </div>
 

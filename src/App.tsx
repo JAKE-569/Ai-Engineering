@@ -23,7 +23,7 @@ import { SafetyView } from './components/SafetyView';
 import { DesignErrorsView } from './components/DesignErrorsView';
 import { CostVeView } from './components/CostVeView';
 import { UploadView } from './components/UploadView';
-import { CadViewerModal } from './components/CadViewerModal';
+import { PdfViewerModal } from './components/PdfViewerModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { DeploySupabaseModal } from './components/DeploySupabaseModal';
 import { ChevronDown, Folder, Layers, Database } from 'lucide-react';
@@ -46,7 +46,7 @@ export default function App() {
 
   // Modal States
   const [isDeployModalOpen, setIsDeployModalOpen] = useState<boolean>(false);
-  const [cadModalErrorItem, setCadModalErrorItem] = useState<DesignErrorItem | null>(null);
+  const [pdfViewerFile, setPdfViewerFile] = useState<any | null>(null);
   const [ocrModalFile, setOcrModalFile] = useState<UploadFile | ReviewItem | null>(null);
 
   // Load data from Supabase if connected
@@ -80,53 +80,35 @@ export default function App() {
     return success;
   };
 
-  const handleOpenCadViewer = (dwgFile: string, errorCode?: string) => {
-    const foundError = designErrors.find(
-      (e) => e.dwgFile === dwgFile || (errorCode && e.errorCode === errorCode)
-    );
+  const handleOpenPdfViewer = (dwgFile: string, errorCode?: string) => {
+    const foundErrorByFile = designErrors.find((e) => e.dwgFile === dwgFile);
+    const foundErrorByCode = errorCode ? designErrors.find((e) => e.errorCode === errorCode) : undefined;
+    const foundError = foundErrorByFile || foundErrorByCode;
 
     const foundReview = reviewItems.find((r) => r.fileName === dwgFile);
     const foundUpload = uploadFiles.find((u) => u.name === dwgFile);
 
-    if (foundError) {
-      setCadModalErrorItem({
+    if (foundReview) {
+      setPdfViewerFile(foundReview);
+    } else if (foundUpload) {
+      setPdfViewerFile(foundUpload);
+    } else if (foundError) {
+      setPdfViewerFile({
         ...foundError,
-        docCategory: foundError.docCategory || foundReview?.docCategory || foundUpload?.docCategory || '도면',
-        tradeCategory: foundError.tradeCategory || foundReview?.tradeCategory || foundUpload?.tradeCategory || '소방',
-        drawingTitle: foundError.drawingTitle || foundReview?.drawingTitle || foundUpload?.drawingTitle || dwgFile,
-        ocrBlocks: foundError.ocrBlocks || foundReview?.ocrBlocks || foundUpload?.ocrBlocks,
-        markups:
-          foundError.markups && foundError.markups.length > 0
-            ? foundError.markups
-            : foundReview?.markups || foundUpload?.markups,
-        fileDataUrl: foundError.fileDataUrl || foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundError.cadUrl,
-        cadUrl: foundError.cadUrl || foundReview?.fileDataUrl || foundUpload?.fileDataUrl,
+        fileName: foundError.dwgFile,
+        docCategory: foundError.docCategory || '도면',
+        tradeCategory: foundError.tradeCategory || '소방',
+        drawingTitle: foundError.drawingTitle || dwgFile,
+        fileDataUrl: foundError.fileDataUrl || foundError.cadUrl,
       });
     } else {
-      setCadModalErrorItem({
+      setPdfViewerFile({
         id: `temp-${Date.now()}`,
-        errorCode: errorCode || `ERR-${(foundReview?.tradeCategory || foundUpload?.tradeCategory || 'CAD').substring(0, 3).toUpperCase()}-001`,
-        dwgFile,
-        docCategory: foundReview?.docCategory || foundUpload?.docCategory || '도면',
-        tradeCategory: foundReview?.tradeCategory || foundUpload?.tradeCategory || '소방',
-        drawingTitle: foundReview?.drawingTitle || foundUpload?.drawingTitle || dwgFile,
-        description: `${dwgFile} - CAD 도면 레이어, OCR 텍스트 및 기술 규격 정밀 검토`,
-        type:
-          (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '토목'
-            ? 'Civil'
-            : (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '건축전기'
-            ? 'Electrical'
-            : (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '건축기계'
-            ? 'Mechanical'
-            : (foundReview?.tradeCategory || foundUpload?.tradeCategory) === '소방'
-            ? 'Fire'
-            : 'Structural',
-        severity: 'CRITICAL',
-        fileDataUrl: foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundReview?.cadUrl,
-        cadUrl: foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundReview?.cadUrl,
-        ocrBlocks: foundReview?.ocrBlocks || foundUpload?.ocrBlocks,
-        markups: foundReview?.markups || foundUpload?.markups,
-        suggestedFix: 'KDS / KEC / NFTC 국가기술기준에 의거한 설계 및 규격 수정 적용.',
+        fileName: dwgFile,
+        docCategory: '도면',
+        tradeCategory: '소방',
+        drawingTitle: dwgFile,
+        description: `${dwgFile} - PDF 도면 정밀 검토`,
       });
     }
   };
@@ -231,7 +213,7 @@ export default function App() {
               reviewItems={reviewItems}
               uploadFiles={uploadFiles}
               onSelectTab={setActiveTab}
-              onOpenCadViewer={handleOpenCadViewer}
+              onOpenPdfViewer={handleOpenPdfViewer}
               onOpenOcrModal={(file) => setOcrModalFile(file)}
               onUpdateReviewItem={handleUpdateReviewItem}
               searchQuery={searchQuery}
@@ -241,7 +223,7 @@ export default function App() {
           {activeTab === 'safety' && (
             <SafetyView
               safetyItems={safetyItems}
-              onOpenCadViewer={handleOpenCadViewer}
+              onOpenPdfViewer={handleOpenPdfViewer}
               onSelectTab={setActiveTab}
               searchQuery={searchQuery}
             />
@@ -250,7 +232,7 @@ export default function App() {
           {activeTab === 'errors' && (
             <DesignErrorsView
               designErrors={designErrors}
-              onOpenCadViewer={handleOpenCadViewer}
+              onOpenPdfViewer={handleOpenPdfViewer}
               onSelectTab={setActiveTab}
               searchQuery={searchQuery}
             />
@@ -271,16 +253,16 @@ export default function App() {
               onDeleteUploadFile={handleDeleteUploadFile}
               onSelectTab={setActiveTab}
               onOpenOcrModal={(file) => setOcrModalFile(file)}
-              onOpenCadViewer={handleOpenCadViewer}
+              onOpenPdfViewer={handleOpenPdfViewer}
             />
           )}
         </main>
       </div>
 
-      {/* CAD Drawing Overlay Viewer Modal */}
-      <CadViewerModal
-        errorItem={cadModalErrorItem}
-        onClose={() => setCadModalErrorItem(null)}
+      {/* PDF Drawing Overlay Viewer Modal */}
+      <PdfViewerModal
+        file={pdfViewerFile}
+        onClose={() => setPdfViewerFile(null)}
       />
 
       {/* OCR Review & Text Inspection Modal */}

@@ -17,14 +17,14 @@ import {
 
 interface DesignErrorsViewProps {
   designErrors: DesignErrorItem[];
-  onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenPdfViewer: (dwgFile: string, errorCode?: string) => void;
   onSelectTab?: (tab: PageTab) => void;
   searchQuery: string;
 }
 
 export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
   designErrors,
-  onOpenCadViewer,
+  onOpenPdfViewer,
   onSelectTab,
   searchQuery,
 }) => {
@@ -202,7 +202,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
               등록된 도면 오류가 없습니다.
             </h4>
             <p className="font-body text-xs text-[#454651] max-w-md mx-auto">
-              도면 업로드 메뉴에서 실제 도면 파일(.png, .jpg, .dwg, .pdf)을 업로드하면 OCR 스캔 및 설계 오류 자동 감지 결과가 여기에 표시됩니다.
+              도면 업로드 메뉴에서 PDF 도면 파일(DWG 제외)을 업로드하면 OCR 스캔 및 설계 오류 자동 감지 결과가 여기에 표시됩니다.
             </p>
             {onSelectTab && (
               <button
@@ -273,9 +273,9 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => onOpenCadViewer(item.dwgFile, item.errorCode)}
+                        onClick={() => onOpenPdfViewer(item.dwgFile, item.errorCode)}
                         className="p-1.5 text-[#000d5f] hover:bg-[#dfe0ff] rounded transition-all cursor-pointer"
-                        title="CAD 도면 뷰어 열기"
+                        title="PDF 도면 뷰어 열기"
                       >
                         <Eye className="w-4 h-4" />
                       </button>

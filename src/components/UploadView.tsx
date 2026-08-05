@@ -37,7 +37,7 @@ interface UploadViewProps {
   onDeleteUploadFile: (id: string) => void;
   onSelectTab: (tab: PageTab) => void;
   onOpenOcrModal: (file: UploadFile) => void;
-  onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenPdfViewer: (dwgFile: string, errorCode?: string) => void;
 }
 
 const DOC_CATEGORIES: { id: DocCategory; label: string; desc: string; icon: string }[] = [
@@ -60,7 +60,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   onDeleteUploadFile,
   onSelectTab,
   onOpenOcrModal,
-  onOpenCadViewer,
+  onOpenPdfViewer,
 }) => {
   const [selectedDocCategory, setSelectedDocCategory] = useState<DocCategory>('도면');
   const [selectedTradeCategory, setSelectedTradeCategory] = useState<TradeCategory>('소방');
@@ -93,14 +93,34 @@ export const UploadView: React.FC<UploadViewProps> = ({
     const files = Array.from(filesList);
     if (files.length === 0) return;
 
-    setIsProcessing(true);
-    setBatchProgress({ current: 0, total: files.length });
+    // Filter out unsupported DWG/non-PDF files when uploading drawings
+    const validFiles: File[] = [];
+    for (const f of files) {
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      setBatchProgress({ current: i + 1, total: files.length });
+      if (ext === 'dwg' || ext === 'dxf') {
+        alert(`[업로드 제한] 도면 업로드는 DWG/DXF 파일이 제외되며, PDF 파일만 업로드 가능합니다.\n(제외된 파일: ${f.name})`);
+        continue;
+      }
+
+      if (selectedDocCategory === '도면' && ext !== 'pdf') {
+        alert(`[업로드 제한] 도서 구분이 [도면]일 경우 PDF 도면만 업로드 가능합니다. (DWG/DXF 제외)\n(제외된 파일: ${f.name})`);
+        continue;
+      }
+
+      validFiles.push(f);
+    }
+
+    if (validFiles.length === 0) return;
+
+    setIsProcessing(true);
+    setBatchProgress({ current: 0, total: validFiles.length });
+
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      setBatchProgress({ current: i + 1, total: validFiles.length });
       setProcessingStatus(
-        `[${i + 1}/${files.length}] "${file.name}" Gemini Vision OCR 및 ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
+        `[${i + 1}/${validFiles.length}] "${file.name}" Gemini Vision OCR 및 ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
       );
 
       if (i > 0) {
@@ -366,7 +386,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                         active ? 'text-blue-100' : 'text-[#767682]'
                       }`}
                     >
-                      {cat.id === '도면' ? 'CAD/PDF' : cat.id === '시방서' ? 'Spec' : 'BoQ'}
+                      {cat.id === '도면' ? 'PDF (DWG제외)' : cat.id === '시방서' ? 'Spec' : 'BoQ'}
                     </span>
                   </div>
                 </button>
@@ -443,7 +463,13 @@ export const UploadView: React.FC<UploadViewProps> = ({
           onChange={handleFileSelect}
           className="hidden"
           multiple
-          accept=".dwg,.dxf,.pdf,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg,.webp"
+          accept={
+            selectedDocCategory === '도면'
+              ? '.pdf'
+              : selectedDocCategory === '시방서'
+              ? '.pdf,.doc,.docx,.txt'
+              : '.pdf,.xlsx,.xls,.csv'
+          }
         />
 
         <div className="w-16 h-16 rounded-2xl bg-[#dfe0ff] flex items-center justify-center text-[#000d5f] mb-4 shadow-sm">
@@ -457,13 +483,17 @@ export const UploadView: React.FC<UploadViewProps> = ({
         <h3 className="font-headline font-bold text-lg text-[#191c1e]">
           {isProcessing
             ? `[${selectedTradeCategory} / ${selectedDocCategory}] 전문가 AI 검토 진행 중...`
-            : `[${selectedTradeCategory}] 공종 [${selectedDocCategory}] 파일 일괄/다중 업로드`}
+            : `[${selectedTradeCategory}] 공종 [${selectedDocCategory}] ${selectedDocCategory === '도면' ? 'PDF 도면 다중 업로드 (DWG 제외)' : '파일 일괄/다중 업로드'}`}
         </h3>
 
         <p className="font-body text-xs text-[#454651] mt-1 max-w-lg leading-relaxed">
           {isProcessing
             ? processingStatus
-            : `현재 선택: 도서 [${selectedDocCategory}] / 공종 [${selectedTradeCategory}]. 클릭하거나 여러 도면/문서 파일(.png, .jpg, .dwg, .pdf, .xlsx 등)을 한 번에 다중 선택 or 드래그하여 업로드하세요.`}
+            : `현재 선택: 도서 [${selectedDocCategory}] / 공종 [${selectedTradeCategory}]. ${
+                selectedDocCategory === '도면'
+                  ? '도면은 DWG 파일 업로드가 제외되며 PDF 도면 파일만 업로드 가능합니다.'
+                  : '클릭하거나 파일(.pdf, .docx, .xlsx 등)을 한 번에 다중 선택 or 드래그하여 업로드하세요.'
+              }`}
         </p>
 
         {/* Batch Upload Progress Bar */}
@@ -484,7 +514,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             className="px-6 py-2.5 bg-[#000d5f] text-white text-xs font-mono font-bold rounded-xl shadow-sm hover:opacity-90 flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <FolderOpen className="w-4 h-4" />
-            [{selectedTradeCategory}] 분야 {selectedDocCategory} 다중 파일 선택 (여러 장)
+            [{selectedTradeCategory}] 분야 {selectedDocCategory} {selectedDocCategory === '도면' ? 'PDF 파일만' : ''} 선택 (여러 장)
           </button>
         </div>
       </div>
@@ -510,7 +540,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               업로드된 도면/문서가 없습니다.
             </p>
             <p className="font-body text-xs text-[#454651] max-w-md mx-auto">
-              상단의 도서 구분과 공종을 선택한 후, 실시간 파일(PNG/JPG/DWG/PDF/XLSX)을 선택하여 전문가 AI 검토를 시행하세요.
+              상단의 도서 구분과 공종을 선택한 후, PDF 도면(DWG 제외) 및 문서를 선택하여 전문가 AI 검토를 시행하세요.
             </p>
           </div>
         ) : (
@@ -607,12 +637,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
                     </td>
                     <td className="px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
                       <button
-                        onClick={() => onOpenCadViewer(file.name, file.drawingNumber)}
+                        onClick={() => onOpenPdfViewer(file.name, file.drawingNumber)}
                         className="px-2.5 py-1.5 bg-[#000d5f] text-white hover:bg-[#1a2b88] rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                        title="CAD 도면 뷰어 구동 (레이어, 마크업, 도면 분석)"
+                        title="PDF 도면 뷰어 구동 (마크업, 도면 분석, 정밀 검토)"
                       >
-                        <span className="material-symbols-outlined text-sm">architecture</span>
-                        CAD 뷰어
+                        <FileText className="w-3.5 h-3.5 text-red-300" />
+                        PDF 도면 뷰어
                       </button>
 
                       <button

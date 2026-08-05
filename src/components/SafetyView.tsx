@@ -4,14 +4,14 @@ import { ShieldAlert, FileText, CheckCircle, AlertTriangle, Eye, Plus, UploadClo
 
 interface SafetyViewProps {
   safetyItems: SafetyItem[];
-  onOpenCadViewer: (dwgFile: string) => void;
+  onOpenPdfViewer: (dwgFile: string) => void;
   onSelectTab?: (tab: PageTab) => void;
   searchQuery: string;
 }
 
 export const SafetyView: React.FC<SafetyViewProps> = ({
   safetyItems,
-  onOpenCadViewer,
+  onOpenPdfViewer,
   onSelectTab,
   searchQuery,
 }) => {
@@ -94,8 +94,9 @@ export const SafetyView: React.FC<SafetyViewProps> = ({
                     <td className="px-6 py-4 text-[#454651] font-mono">{item.status}</td>
                     <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => onOpenCadViewer(item.fileName)}
+                        onClick={() => onOpenPdfViewer(item.fileName)}
                         className="p-1.5 text-[#000d5f] hover:bg-[#dfe0ff] rounded cursor-pointer"
+                        title="PDF 도면 뷰어 열기"
                       >
                         <Eye className="w-4 h-4" />
                       </button>

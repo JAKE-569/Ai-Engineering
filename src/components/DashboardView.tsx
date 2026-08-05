@@ -23,7 +23,7 @@ interface DashboardViewProps {
   reviewItems: ReviewItem[];
   uploadFiles?: UploadFile[];
   onSelectTab: (tab: PageTab) => void;
-  onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenPdfViewer: (dwgFile: string, errorCode?: string) => void;
   onOpenOcrModal?: (file: ReviewItem) => void;
   onUpdateReviewItem: (updated: ReviewItem) => void;
   searchQuery: string;
@@ -33,7 +33,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   reviewItems,
   uploadFiles = [],
   onSelectTab,
-  onOpenCadViewer,
+  onOpenPdfViewer,
   onOpenOcrModal,
   onUpdateReviewItem,
   searchQuery,
@@ -308,7 +308,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           handleSelectRow(item);
-                          onOpenCadViewer(item.fileName, 'ERR-STR-021');
+                          onOpenPdfViewer(item.fileName, item.drawingNumber);
                         }}
                         className="text-[#000d5f] hover:underline font-mono text-xs font-bold cursor-pointer"
                       >
@@ -326,7 +326,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Split View Panel (Lower Half) */}
       {selectedItem && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[580px]">
-          {/* Left: Original CAD / Image Document View */}
+          {/* Left: Original PDF / Document View */}
           <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
               <h5 className="font-headline font-bold text-sm text-[#191c1e] flex items-center gap-2">
@@ -344,11 +344,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </button>
                 )}
                 <button
-                  onClick={() => onOpenCadViewer(selectedItem.fileName, 'ERR-STR-021')}
+                  onClick={() => onOpenPdfViewer(selectedItem.fileName, selectedItem.drawingNumber)}
                   className="px-3 py-1 bg-[#000d5f] text-white text-xs font-mono font-bold rounded hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-sm">visibility</span>
-                  CAD 뷰어
+                  PDF 도면 뷰어
                 </button>
               </div>
             </div>
