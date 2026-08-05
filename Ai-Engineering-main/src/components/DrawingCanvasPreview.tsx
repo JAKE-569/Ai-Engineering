@@ -114,11 +114,10 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   const title = drawingTitle || fileName || `${tradeCategory} ${docCategory} 정밀 검토도`;
   const dwgNo = drawingNumber || `DWG-${tradeCategory.substring(0, 2).toUpperCase()}-2024-001`;
 
-  // Default fallback markups if none provided
-  const effectiveMarkups: ReviewMarkup[] =
-    markups && markups.length > 0
-      ? markups
-      : [
+  // Only render markups returned by the actual drawing review.
+  const effectiveMarkups: ReviewMarkup[] = markups || [];
+  /* legacy example markups removed
+      [
           {
             id: 'm1',
             xPercent: 35,
@@ -173,7 +172,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                 : '소방시설법 / NFTC',
             severity: 'WARNING',
           },
-        ];
+        ]; */
 
   return (
     <div
