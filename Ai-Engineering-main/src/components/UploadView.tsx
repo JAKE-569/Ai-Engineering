@@ -324,8 +324,10 @@ export const UploadView: React.FC<UploadViewProps> = ({
         console.error(`Error processing file ${file.name}:`, err);
         if (sourceDataUrl) {
           const fallbackType: UploadFile['type'] = file.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Image';
+          const fallbackId = `fallback-${Date.now()}-${i}`;
+          const fallbackTitle = file.name.replace(/\.[^/.]+$/, '');
           onAddUploadFile({
-            id: `up-fallback-${Date.now()}-${i}`,
+            id: `up-${fallbackId}`,
             name: file.name,
             type: fallbackType,
             docCategory: selectedDocCategory,
@@ -335,12 +337,33 @@ export const UploadView: React.FC<UploadViewProps> = ({
             status: '분석 완료',
             uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
             fileDataUrl: sourceDataUrl,
-            drawingTitle: file.name.replace(/\.[^/.]+$/, ''),
+            drawingTitle: fallbackTitle,
             drawingNumber: 'DWG-UPLOAD',
             scale: '1 : 100',
             rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
             ocrBlocks: [],
             markups: [],
+          }, {
+            reviewItem: {
+              id: `rev-${fallbackId}`,
+              fileName: file.name,
+              fileType: fallbackType,
+              docCategory: selectedDocCategory,
+              tradeCategory: selectedTradeCategory,
+              reviewType: '도면 검토',
+              status: '검토대기',
+              result: '원본 파일 등록 완료. AI 시각 검토 응답 대기 중입니다.',
+              updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+              projectId: 'PH-2024-03',
+              description: `${fallbackTitle} 원본 파일이 등록되었습니다.`,
+              fileDataUrl: sourceDataUrl,
+              drawingTitle: fallbackTitle,
+              drawingNumber: 'DWG-UPLOAD',
+              scale: '1 : 100',
+              rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
+              ocrBlocks: [],
+              markups: [],
+            },
           });
         }
       }
