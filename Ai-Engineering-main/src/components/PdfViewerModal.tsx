@@ -86,7 +86,9 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
             <div className="flex-1 bg-[#151d2f] p-4 overflow-auto">
               <div className="relative w-full h-full min-h-[620px] bg-white rounded-lg overflow-hidden">
                 {isRealPdf ? (
-                  <iframe src={fileDataUrl} title={`${fileName} source PDF`} className="absolute inset-0 w-full h-full border-0" />
+                  <object data={fileDataUrl} type="application/pdf" title={`${fileName} source PDF`} className="absolute inset-0 w-full h-full">
+                    <embed src={fileDataUrl} type="application/pdf" className="w-full h-full" />
+                  </object>
                 ) : fileDataUrl.startsWith('data:image/') ? (
                   <img src={fileDataUrl} alt={fileName} className="w-full h-full object-contain" />
                 ) : (
