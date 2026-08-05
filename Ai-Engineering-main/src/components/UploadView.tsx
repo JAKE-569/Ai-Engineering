@@ -147,7 +147,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         let apiResult = null;
         try {
           const controller = new AbortController();
-          const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+          const timeoutId = window.setTimeout(() => controller.abort(), 10000);
           const response = await fetch('/api/gemini/review-drawing', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
