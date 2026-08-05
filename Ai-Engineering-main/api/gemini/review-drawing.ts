@@ -18,14 +18,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!fileName || !base64Data) {
     return res.status(400).json({ error: 'fileName and base64Data are required' });
   }
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(503).json({ error: 'OPENAI_API_KEY is not configured in Vercel' });
+  if (!process.env.NVIDIA_API_KEY) {
+    return res.status(503).json({ error: 'NVIDIA_API_KEY is not configured in Vercel' });
   }
 
   try {
     const cleanBase64 = stripDataUrl(base64Data);
     const effectiveMime = mimeType || 'application/pdf';
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = new OpenAI({
+      apiKey: process.env.NVIDIA_API_KEY,
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+    });
     const prompt = `You are a senior Korean plant engineering drawing reviewer. Review the supplied PDF/image visually, not OCR alone. Inspect geometry, dimensions, symbols, linework, equipment, pipes/cables, spatial relationships, clashes, missing components, and code-relevant evidence. Also extract OCR text. Return only valid JSON with this shape:
 {
   "drawingTitle":"string", "drawingNumber":"string", "scale":"string",
@@ -37,25 +40,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   "markups":[{"id":"m1","xPercent":50,"yPercent":50,"title":"string","comment":"string","codeClause":"string","severity":"CRITICAL|WARNING|INFO"}],
   "safetyItems":[], "veItems":[]
 }`;
-    const isPdf = effectiveMime === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
-    const content = isPdf
-      ? [
-          { type: 'input_file', filename: fileName, file_data: base64Data },
-          { type: 'input_text', text: prompt },
-        ]
-      : [
-          { type: 'input_image', image_url: base64Data, detail: 'high' },
-          { type: 'input_text', text: prompt },
-        ];
-    const response = await client.responses.create({
-      model: 'gpt-4o-mini',
-      input: [{ role: 'user', content } as any],
-      text: { format: { type: 'json_object' } },
+    if (effectiveMime === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+      return res.status(415).json({ error: 'NVIDIA Vision review requires an image page. Export the PDF page as PNG/JPEG and upload the image.' });
+    }
+    const response = await client.chat.completions.create({
+      model: 'nvidia/nemotron-nano-12b-v2-vl',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: base64Data, detail: 'high' } },
+        ],
+      } as any],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      max_tokens: 4096,
     });
-    if (!response.output_text) return res.status(502).json({ error: 'OpenAI returned an empty review' });
-    return res.status(200).json({ success: true, data: JSON.parse(response.output_text.trim()) });
+    const outputText = response.choices[0]?.message?.content;
+    if (!outputText || typeof outputText !== 'string') return res.status(502).json({ error: 'NVIDIA returned an empty review' });
+    return res.status(200).json({ success: true, data: JSON.parse(outputText.trim()) });
   } catch (error) {
-    console.error('OpenAI drawing review failed:', error);
-    return res.status(502).json({ error: 'OpenAI drawing review failed' });
+    console.error('NVIDIA drawing review failed:', error);
+    return res.status(502).json({ error: 'NVIDIA drawing review failed' });
   }
 }
