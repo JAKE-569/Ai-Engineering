@@ -95,7 +95,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    const pdf = await pdfjsLib.getDocument({ data: bytes, disableWorker: true } as any).promise;
     const page = await pdf.getPage(1);
     const viewport = page.getViewport({ scale: 1.5 });
     const canvas = document.createElement('canvas');
@@ -103,7 +103,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
     canvas.height = viewport.height;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Unable to create PDF rendering canvas');
-  await page.render({ canvas, canvasContext: context, viewport }).promise;
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
     return canvas.toDataURL('image/png');
   };
 
