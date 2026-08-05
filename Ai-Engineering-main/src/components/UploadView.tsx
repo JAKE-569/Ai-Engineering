@@ -146,9 +146,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         let apiResult = null;
         try {
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), 120000);
           const response = await fetch('/api/gemini/review-drawing', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               fileName: file.name,
               mimeType: reviewMimeType,
@@ -157,6 +160,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               tradeCategory: selectedTradeCategory,
             }),
           });
+          window.clearTimeout(timeoutId);
           const data = await response.json();
           if (data.success && data.data) {
             apiResult = data.data;

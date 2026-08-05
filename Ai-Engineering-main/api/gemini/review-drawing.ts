@@ -28,6 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const client = new OpenAI({
       apiKey: process.env.NVIDIA_API_KEY,
       baseURL: 'https://integrate.api.nvidia.com/v1',
+      timeout: 90000,
     });
     const prompt = `You are a senior Korean plant engineering drawing reviewer. Review the supplied PDF/image visually, not OCR alone. Inspect geometry, dimensions, symbols, linework, equipment, pipes/cables, spatial relationships, clashes, missing components, and code-relevant evidence. Also extract OCR text. Return only valid JSON with this shape:
 {
@@ -54,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } as any],
       response_format: { type: 'json_object' },
       temperature: 0.1,
-      max_tokens: 4096,
+      max_tokens: 2048,
     });
     const outputText = response.choices[0]?.message?.content;
     if (!outputText || typeof outputText !== 'string') return res.status(502).json({ error: 'NVIDIA returned an empty review' });
