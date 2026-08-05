@@ -65,6 +65,65 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
         fileName.toLowerCase().endsWith('.pdf'))
   );
 
+  const actualMarkups = file.markups || [];
+
+  // Uploaded documents must render their source file directly. Do not fall back
+  // to the legacy simulated sheet because its annotations are not document-specific.
+  if (fileDataUrl) {
+    return (
+      <div className="fixed inset-0 z-[120] bg-black/85 flex items-center justify-center p-3 md:p-6">
+        <div className="bg-[#0e1424] text-white w-full max-w-7xl h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/10">
+          <div className="bg-[#050914] px-6 py-3 border-b border-white/10 flex items-center justify-between gap-3">
+            <div>
+              <div className="font-bold text-sm">{fileName}</div>
+              <div className="text-[11px] text-gray-400">{drawingTitle} · {drawingNumber}</div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded hover:bg-red-500/20 cursor-pointer" aria-label="Close PDF viewer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 bg-[#151d2f] p-4 overflow-auto">
+              <div className="relative w-full h-full min-h-[620px] bg-white rounded-lg overflow-hidden">
+                {isRealPdf ? (
+                  <iframe src={fileDataUrl} title={`${fileName} source PDF`} className="absolute inset-0 w-full h-full border-0" />
+                ) : fileDataUrl.startsWith('data:image/') ? (
+                  <img src={fileDataUrl} alt={fileName} className="w-full h-full object-contain" />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-500">지원되지 않는 도면 형식입니다.</div>
+                )}
+                {showMarkups && actualMarkups.length > 0 && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {actualMarkups.map((markup) => (
+                      <div key={markup.id} className="absolute pointer-events-auto" style={{ left: `${markup.xPercent}%`, top: `${markup.yPercent}%` }}>
+                        <div className="w-5 h-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600 border-2 border-white shadow-lg text-[10px] flex items-center justify-center font-bold">!</div>
+                        <div className="ml-2 mt-1 max-w-xs rounded-lg bg-red-950/95 border border-red-400 p-2 text-[11px] shadow-xl">
+                          <div className="font-bold text-red-200">{markup.title}</div>
+                          <div className="text-white mt-1">{markup.comment}</div>
+                          {markup.codeClause && <div className="text-red-300 mt-1">{markup.codeClause}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {showOcrPanel && (
+              <div className="w-80 md:w-96 bg-[#090e1a] border-l border-white/10 p-4 overflow-y-auto text-xs">
+                <div className="font-bold text-blue-300 mb-2">OCR 및 도면 검토 결과</div>
+                <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">
+                  {'rawOcrText' in file && file.rawOcrText ? file.rawOcrText : 'OCR 결과가 없습니다.'}
+                </div>
+                <div className="mt-5 font-bold text-red-300">실제 도면 마크업: {actualMarkups.length}건</div>
+                {actualMarkups.map((markup) => <div key={markup.id} className="mt-2 border-b border-white/10 pb-2 text-gray-300">{markup.title}<br />{markup.comment}</div>)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 animate-fadeIn">
       <div className="bg-[#0e1424] text-white w-full max-w-7xl h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/10">
