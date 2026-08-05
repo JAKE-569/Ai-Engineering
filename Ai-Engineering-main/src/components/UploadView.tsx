@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { UploadFile, PageTab, ReviewItem, DesignErrorItem, SafetyItem, VeItem, DocCategory, TradeCategory } from '../types';
 import { PdfViewerModal } from './PdfViewerModal';
 import {
@@ -89,6 +90,23 @@ export const UploadView: React.FC<UploadViewProps> = ({
     });
   };
 
+  const renderPdfFirstPageAsImage = async (pdfDataUrl: string): Promise<string> => {
+    const base64 = pdfDataUrl.split(',')[1] || '';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Unable to create PDF rendering canvas');
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+    return canvas.toDataURL('image/png');
+  };
+
   const processBatchFiles = async (filesList: FileList | File[]) => {
     const files = Array.from(filesList);
     if (files.length === 0) return;
@@ -118,6 +136,14 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         const sizeMB = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1;
 
+        let reviewDataUrl = fileDataUrl;
+        let reviewMimeType = file.type || 'image/png';
+        if (fileType === 'PDF') {
+          setProcessingStatus(`[${i + 1}/${files.length}] PDF 1페이지를 이미지로 변환하여 NVIDIA Vision 검토 중...`);
+          reviewDataUrl = await renderPdfFirstPageAsImage(fileDataUrl);
+          reviewMimeType = 'image/png';
+        }
+
         let apiResult = null;
         try {
           const response = await fetch('/api/gemini/review-drawing', {
@@ -125,8 +151,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               fileName: file.name,
-              mimeType: file.type || 'image/png',
-              base64Data: fileDataUrl,
+              mimeType: reviewMimeType,
+              base64Data: reviewDataUrl,
               docCategory: selectedDocCategory,
               tradeCategory: selectedTradeCategory,
             }),
