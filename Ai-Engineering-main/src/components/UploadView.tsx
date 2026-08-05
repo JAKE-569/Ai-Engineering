@@ -102,7 +102,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
     const pdf = await pdfjsLib.getDocument({ data: bytes, disableWorker: true } as any).promise;
     const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 1.5 });
+    const viewport = page.getViewport({ scale: 2.5 });
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
@@ -198,7 +198,19 @@ export const UploadView: React.FC<UploadViewProps> = ({
           { id: 'b3', text: `${cleanTitle} - ${selectedTradeCategory} 공종 규격 및 기술 사양 검토`, category: '치수', confidence: 95 },
           { id: 'b4', text: `${cleanTitle} - ${selectedTradeCategory} 법규 및 안전기준 준수 여부 검토`, category: '소방/안전', confidence: 92 },
         ];
-        const markups = apiResult?.markups || [];
+        const modelMarkups = Array.isArray(apiResult?.markups) ? apiResult.markups : [];
+        const visualFindings = Array.isArray(apiResult?.visualFindings) ? apiResult.visualFindings : [];
+        const markups = modelMarkups.length > 0
+          ? modelMarkups
+          : visualFindings.map((finding: any, index: number) => ({
+              id: finding.id || `vf-${index + 1}`,
+              xPercent: Number(finding.xPercent) || 50,
+              yPercent: Number(finding.yPercent) || 50,
+              title: finding.finding || `시각 검토 항목 ${index + 1}`,
+              comment: finding.evidence || '업로드 도면에서 확인된 시각 검토 항목입니다.',
+              codeClause: finding.codeClause,
+              severity: finding.severity || 'INFO',
+            }));
 
         const uniqueId = `${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`;
 
