@@ -147,7 +147,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         let apiResult = null;
         try {
           const controller = new AbortController();
-          const timeoutId = window.setTimeout(() => controller.abort(), 120000);
+          const timeoutId = window.setTimeout(() => controller.abort(), 30000);
           const response = await fetch('/api/gemini/review-drawing', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -171,9 +171,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
           console.error('API OCR Review call error:', err);
         }
 
-        if (!apiResult) {
-          throw new Error('No visual review result was returned for the uploaded drawing');
-        }
+        // Keep the uploaded source available even when the external vision service
+        // is unavailable. The review fields below fall back to document metadata.
 
         // Use only metadata returned from the uploaded document review.
         const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
@@ -204,7 +203,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           tradeCategory: selectedTradeCategory,
           sizeMB,
           progress: 100,
-          status: '분석 완료',
+          status: apiResult ? '분석 완료' : '검토 대기 (AI 미응답)',
           uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           fileDataUrl,
           drawingTitle,
