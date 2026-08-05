@@ -2,6 +2,11 @@ import React, { useState, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { UploadFile, PageTab, ReviewItem, DesignErrorItem, SafetyItem, VeItem, DocCategory, TradeCategory } from '../types';
 import { PdfViewerModal } from './PdfViewerModal';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/legacy/build/pdf.worker.mjs',
+  import.meta.url,
+).toString();
 import {
   UploadCloud,
   FileCheck,
