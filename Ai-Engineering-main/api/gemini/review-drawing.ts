@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       baseURL: 'https://integrate.api.nvidia.com/v1',
       timeout: 90000,
     });
-    const prompt = `Visually review this Korean plant engineering drawing, not OCR alone. Identify visible geometry, dimensions, symbols, equipment, pipes/cables, clashes, missing components, and code-relevant evidence. Extract key text. Return concise valid JSON only:
+    const prompt = `Perform a rigorous visual engineering review of this Korean plant drawing. Do not rely on OCR alone. Inspect the actual pixels and systematically check: title block, scale, dimensions, levels, symbols, equipment, pipes/ducts/cables, routes, clearances, accessibility, spatial clashes, missing connections, fire/life-safety elements, notes, and visible code evidence. For every relevant area return either PASS, VERIFY, or a specific defect with pixel-based evidence. Produce at least 3 meaningful visual findings when the drawing contains enough content; do not invent geometry that is not visible. Use xPercent/yPercent only for locations visible in the image. Include OCR only as supporting evidence. Return concise valid JSON only:
 {
   "drawingTitle":"string", "drawingNumber":"string", "scale":"string",
   "docCategory":"${docCategory}", "tradeCategory":"${tradeCategory}",

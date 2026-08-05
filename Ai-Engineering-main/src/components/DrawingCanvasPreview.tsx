@@ -294,7 +294,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
               </div>
 
               {/* Real PDF Embed or Interactive PDF Sheet Content */}
-              {rawUrl && rawUrl.startsWith('data:application/pdf') ? (
+              {rawUrl && isPdfData ? (
                 <div className="relative w-full h-[400px]">
                   <object
                     data={rawUrl}
