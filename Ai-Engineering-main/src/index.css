@@ -87,6 +87,22 @@ header .font-headline { font-family: '맑은 고딕', 'Malgun Gothic', sans-seri
 .review-workspace-header button { color: #dbeafe !important; }
 .review-workspace-header button:hover { background: rgba(255,255,255,0.12) !important; }
 main h3 > .material-symbols-outlined { margin-right: 2px; }
+main h3 .dashboard-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  margin-right: 4px;
+  border-radius: 10px;
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+  font-size: 20px;
+}
+main h3 .dashboard-card-icon--safety { background: #123b78; }
+main h3 .dashboard-card-icon--error { background: #b42318; }
+main h3 .dashboard-card-icon--cost { background: #087443; }
 main { color: #172033; }
 main h2 { color: #123b78; letter-spacing: -0.03em; }
 main h3, main h4, main h5 { letter-spacing: -0.02em; }

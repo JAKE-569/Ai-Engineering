@@ -93,7 +93,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl">gavel</span>
+              <span className="dashboard-card-icon dashboard-card-icon--safety material-symbols-outlined text-xl">gavel</span>
               법규 및 안전 검토
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
@@ -127,7 +127,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl">error_outline</span>
+              <span className="dashboard-card-icon dashboard-card-icon--error material-symbols-outlined text-xl">error_outline</span>
               설계 오류 검토
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
@@ -161,7 +161,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl">payments</span>
+              <span className="dashboard-card-icon dashboard-card-icon--cost material-symbols-outlined text-xl">payments</span>
               공사비 및 VE 분석
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
