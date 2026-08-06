@@ -741,7 +741,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                     <td className="px-4 py-4 font-mono text-xs text-[#454651] whitespace-nowrap">
                       {file.uploadedAt}
                     </td>
-                    <td className="px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
+                    <td className="upload-actions px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
                       <button
                         onClick={() => onOpenCadViewer(file.name, file.drawingNumber)}
                         className="px-2.5 py-1.5 bg-[#000d5f] text-white hover:bg-[#1a2b88] rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"

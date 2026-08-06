@@ -297,7 +297,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
               <h4 className="font-headline font-bold text-lg">AI 지능형 보정 리포트 준비됨</h4>
             </div>
             <p className="font-body text-xs opacity-90 leading-relaxed text-[#dfe0ff] max-w-2xl">
-              업로드된 도면 OCR 텍스트 분석에 맞춰 KDS 14 20:2021 규격을 준수하는 주철근 배치 최적화 및 구조 보정안이 자동 생성되었습니다.
+              {designErrors[0]?.description || '현재 업로드 도면의 설계오류를 기준으로 보정 리포트를 준비했습니다.'}
             </p>
           </div>
 
@@ -318,7 +318,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
             <div className="flex justify-between items-center border-b pb-3 border-[#c6c5d2]">
               <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#000d5f]" />
-                KDS 14 20:2021 기반 AI 보정 리포트
+                실제 도면 기반 AI 보정 리포트
               </h3>
               <button
                 onClick={() => setShowAiSuggestionModal(false)}
@@ -331,7 +331,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
               <div className="p-3 bg-[#f2f4f6] rounded border border-[#c6c5d2]">
                 <p className="font-bold text-[#000d5f] mb-1">업로드 도면 보정 제안</p>
                 <p className="text-[#454651] leading-relaxed">
-                  OCR 스캔 부재 치수에 기반하여 주철근 배근율을 3.6%로 조정하고 KDS 14 표준 피복두께 80mm를 확보하도록 수정을 권장합니다.
+                  {designErrors[0]?.description || 'AI가 실제 업로드 도면에서 검출한 설계오류의 보정안을 표시합니다.'}
                 </p>
               </div>
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-900">
