@@ -44,6 +44,7 @@ interface UploadViewProps {
   onSelectTab: (tab: PageTab) => void;
   onOpenOcrModal: (file: UploadFile) => void;
   onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
+  onAiUsageEvent: (event: { success: boolean; rateLimited?: boolean; model?: string }) => void;
 }
 
 const DOC_CATEGORIES: { id: DocCategory; label: string; desc: string; icon: string }[] = [
@@ -67,6 +68,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   onSelectTab,
   onOpenOcrModal,
   onOpenCadViewer,
+  onAiUsageEvent,
 }) => {
   const [selectedDocCategory, setSelectedDocCategory] = useState<DocCategory>('도면');
   const [selectedTradeCategory, setSelectedTradeCategory] = useState<TradeCategory>('소방');
@@ -179,6 +181,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           window.clearTimeout(timeoutId);
           const data = await response.json();
           if (data.success && data.data) {
+            onAiUsageEvent({ success: true, model: data.model });
             const pageResult = data.data;
             apiResult = apiResult || {};
             apiResult.drawingTitle ||= pageResult.drawingTitle;
@@ -190,9 +193,11 @@ export const UploadView: React.FC<UploadViewProps> = ({
             }
             apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
           } else {
+            onAiUsageEvent({ success: false, rateLimited: response.status === 429 });
             throw new Error(data.error || 'AI visual drawing review failed');
           }
         } catch (err) {
+          if (!(err instanceof Error && err.name === 'AbortError')) onAiUsageEvent({ success: false });
           console.error('API OCR Review call error:', err);
         }
         }
@@ -729,7 +734,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                         title="CAD 도면 뷰어 구동 (레이어, 마크업, 도면 분석)"
                       >
                         <span className="material-symbols-outlined text-sm">architecture</span>
-                        CAD 뷰어
+                        도면 보기
                       </button>
 
                       <button

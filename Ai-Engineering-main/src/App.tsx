@@ -16,7 +16,7 @@ import {
   syncInitialDataToSupabase,
 } from './lib/supabaseClient';
 
-import { Header } from './components/Header';
+import { Header, AiUsageStatus } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { SafetyView } from './components/SafetyView';
@@ -40,6 +40,16 @@ export default function App() {
   const [designErrors, setDesignErrors] = useState<DesignErrorItem[]>([]);
   const [veItems, setVeItems] = useState<VeItem[]>([]);
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
+  const [aiUsage, setAiUsage] = useState<AiUsageStatus>({ totalRequests: 0, successfulRequests: 0, failedRequests: 0, rateLimited: false });
+  const handleAiUsageEvent = (event: { success: boolean; rateLimited?: boolean; model?: string }) => setAiUsage((prev) => ({
+    ...prev,
+    totalRequests: prev.totalRequests + 1,
+    successfulRequests: prev.successfulRequests + (event.success ? 1 : 0),
+    failedRequests: prev.failedRequests + (event.success ? 0 : 1),
+    rateLimited: Boolean(event.rateLimited),
+    lastModel: event.model || prev.lastModel,
+    lastUpdated: new Date().toLocaleTimeString('ko-KR'),
+  }));
 
   // Supabase Configuration State
   const [supabaseConfig, setSupabaseConfigState] = useState<SupabaseConfig>(getSupabaseConfig());
@@ -174,6 +184,7 @@ export default function App() {
           isSupabaseConnected={supabaseConfig.isConnected}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          aiUsage={aiUsage}
         />
 
         {/* Sub-Header: Project Selector & Quick Stats */}
@@ -258,6 +269,7 @@ export default function App() {
               onSelectTab={setActiveTab}
               onOpenOcrModal={(file) => setOcrModalFile(file)}
               onOpenCadViewer={handleOpenCadViewer}
+              onAiUsageEvent={handleAiUsageEvent}
             />
           )}
         </main>
