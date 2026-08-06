@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { X, Search, FileText, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { X, Search, FileText, AlertTriangle, CheckCircle2, ShieldAlert, Maximize2, Minimize2 } from 'lucide-react';
 import { DesignErrorItem, ReviewItem, UploadFile } from '../types';
 import { DrawingCanvasPreview } from './DrawingCanvasPreview';
 
@@ -9,6 +9,7 @@ export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, 
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState(errorItem?.dwgFile || '');
   const [selectedMarkupId, setSelectedMarkupId] = useState<string>('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const selectedUpload = uploadFiles.find((file) => file.name === selectedId) || uploadFiles[0];
   const selectedReview = reviewItems.find((item) => item.fileName === selectedId) || reviewItems.find((item) => item.fileName === errorItem?.dwgFile);
   const source = selectedUpload || selectedReview;
@@ -17,11 +18,11 @@ export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, 
   const documents = useMemo(() => uploadFiles.filter((file) => file.name.toLowerCase().includes(query.toLowerCase())), [uploadFiles, query]);
   if (!errorItem) return null;
 
-  return <div className="fixed inset-0 z-[120] bg-slate-950/80 p-3 md:p-6">
-    <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+  return <div className="fixed inset-0 z-[120] bg-slate-950/80 p-0 md:p-3">
+    <div className={`mx-auto flex h-full flex-col overflow-hidden bg-white shadow-2xl ${isFullscreen ? 'w-full rounded-none' : 'max-w-[1500px] rounded-2xl'}`}>
       <header className="review-workspace-header flex h-16 shrink-0 items-center justify-between border-b border-blue-900 bg-[#0f2d55] px-5 text-white">
         <div><h2 className="text-base font-bold text-slate-900">도면 검토 워크스페이스</h2><p className="text-xs text-slate-500">{source?.name || errorItem.dwgFile} · 실제 업로드 원본</p></div>
-        <button onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+        <div className="flex items-center gap-2"><button onClick={() => setIsFullscreen((value) => !value)} className="rounded-lg p-2 text-blue-100 hover:bg-white/10" title="전체화면"><Maximize2 className="h-5 w-5" /></button><button onClick={onClose} className="rounded-lg p-2 text-blue-100 hover:bg-white/10"><X className="h-5 w-5" /></button></div>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-[250px_minmax(0,1fr)_360px]">
         <aside className="min-h-0 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4">
