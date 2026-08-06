@@ -23,8 +23,8 @@
   }
 
   aside nav button { font-size: 0.9rem; line-height: 1.35rem; }
-  aside nav button:not(.bg-\[\#000d5f\]) { color: #cbd5e1; }
-  aside nav button:not(.bg-\[\#000d5f\]):hover { color: #ffffff; background-color: #1c2b46; }
+  aside nav button:not(.bg-\[\#000d5f\]) { color: #334155; }
+  aside nav button:not(.bg-\[\#000d5f\]):hover { color: #123b78; background-color: #e3edf9; }
 }
 
 .material-symbols-outlined {

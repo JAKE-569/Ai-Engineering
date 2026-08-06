@@ -10,7 +10,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, onLogout }) => {
   return (
-    <aside className="hidden md:flex flex-col h-screen w-64 bg-[#101a2e] border-r border-[#263653] py-6 px-4 fixed left-0 top-0 z-50 shrink-0 text-slate-100">
+    <aside className="hidden md:flex flex-col h-screen w-64 bg-[#f4f7fb] border-r border-[#cbd5e1] py-6 px-4 fixed left-0 top-0 z-50 shrink-0 text-slate-900">
       {/* Brand */}
       <div className="mb-8 px-2">
         <div className="flex items-center gap-3 mb-2">
@@ -26,7 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, onLogo
         {/* CTA Button */}
         <button
           onClick={() => onSelectTab('upload')}
-          className="w-full mt-4 bg-cyan-500 text-[#07101f] py-3 px-3 rounded-lg font-mono text-sm font-bold flex items-center justify-center gap-2 hover:bg-cyan-300 active:scale-95 transition-all shadow-sm cursor-pointer"
+          className="w-full mt-4 bg-[#123b78] text-white py-3 px-3 rounded-lg font-mono text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#0d2c5c] active:scale-95 transition-all shadow-sm cursor-pointer"
         >
           <span className="material-symbols-outlined text-base">add</span>
           새 문서 검토
