@@ -15,6 +15,7 @@ export type SeverityLevel = 'CRITICAL' | 'WARNING' | 'INFO' | '위험' | '주의
 
 export interface ReviewMarkup {
   id: string;
+  pageNumber?: number;
   xPercent: number; // 0~100
   yPercent: number; // 0~100
   title: string;
