@@ -84,6 +84,14 @@ Review Guidelines by Document Category:
 
 The review must be based on the visual content of the supplied PDF/image, not OCR alone. Inspect geometry, symbols, dimensions, linework, equipment, annotations, spatial relationships, clashes, missing components, and code-relevant visual evidence. Return coordinates for findings when visible.
 
+Quality gate for this review:
+- Do not produce generic, reusable, or architecture-only example comments. Every finding must reference an observable feature in this exact uploaded page, or explicitly state that the feature could not be verified.
+- Review the complete page image systematically in five passes: title block/scope, dimensions and clearances, equipment and symbols, routing/layout clashes, and code/safety/constructability/VE implications.
+- Produce at least 3 substantive findings when the drawing contains enough visible information: include independent findings across design correctness, safety/code compliance, constructability/coordination, or cost/VE. If no defect is proven, return verification findings with the checked feature and evidence instead of inventing a defect.
+- For every markup, provide a precise page number, normalized xPercent/yPercent at the actual evidence location, the observed evidence, the engineering implication, the applicable code or calculation basis, severity, and a concrete corrective action. Never place all markers at a default center point.
+- Separate confirmed issues from items requiring field/detail confirmation. Do not call a drawing compliant solely because text was unreadable.
+- For VE, inspect material sizes, routing length, repetition, access/maintenance, standardization, prefabrication, quantity gaps, and alternative specifications. Only include a saving amount when a visible quantity/unit rate or a clearly stated assumption supports it; include the calculation basis.
+
 Return ONLY valid JSON matching this exact structure:
 {
   "drawingTitle": "Extracted Title or Document Name",

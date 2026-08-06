@@ -631,7 +631,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           <div className="flex items-center gap-2">
             <ScanText className="w-5 h-5 text-[#000d5f]" />
             <h4 className="font-headline font-bold text-base text-[#191c1e]">
-              업로드된 실시간 도면 및 OCR 분석 현황
+              업로드된 도면 분석 완료 현황
             </h4>
           </div>
           <span className="font-mono text-xs text-[#454651] font-bold">
@@ -659,9 +659,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
                   <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[80px]">공종 구분</th>
                   <th className="px-5 py-3.5 font-semibold whitespace-nowrap min-w-[160px]">추출 도면명 / 번호</th>
                   <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[70px]">축척</th>
-                  <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[100px]">OCR 분석 상태</th>
+                  <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[100px]">분석 상태</th>
                   <th className="px-4 py-3.5 font-semibold whitespace-nowrap min-w-[120px]">업로드 일시</th>
-                  <th className="px-5 py-3.5 font-semibold text-right whitespace-nowrap min-w-[240px]">OCR / 미리보기 / 작업</th>
+                  <th className="px-5 py-3.5 font-semibold text-right whitespace-nowrap min-w-[180px]">이동 / 관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#c6c5d2] font-body text-xs text-[#191c1e]">
@@ -743,37 +743,10 @@ export const UploadView: React.FC<UploadViewProps> = ({
                     </td>
                     <td className="upload-actions px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
                       <button
-                        onClick={() => onOpenCadViewer(file.name, file.drawingNumber)}
-                        className="hidden px-2.5 py-1.5 bg-[#000d5f] text-white hover:bg-[#1a2b88] rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                        title="CAD 도면 뷰어 구동 (레이어, 마크업, 도면 분석)"
-                      >
-                        <span className="material-symbols-outlined text-sm">architecture</span>
-                        도면 워크스페이스
-                      </button>
-
-                      <button
-                        onClick={() => setPdfPreviewFile(file)}
-                        className="hidden px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white border border-red-200 rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        title="PDF 문서 정밀 미리보기"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        PDF 미리보기
-                      </button>
-
-                      <button
-                        onClick={() => onOpenOcrModal(file)}
-                        className="hidden px-2.5 py-1.5 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        title="OCR 텍스트 스캔 및 레이어 확인"
-                      >
-                        <ScanText className="w-3.5 h-3.5" />
-                        OCR 스캔
-                      </button>
-
-                      <button
                         onClick={() => onSelectTab('dashboard')}
                         className="px-2.5 py-1.5 bg-[#000d5f] text-white rounded text-xs font-mono font-bold hover:opacity-90 inline-flex items-center gap-1 cursor-pointer"
                       >
-                        검토결과
+                        대시보드로 이동
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
 
