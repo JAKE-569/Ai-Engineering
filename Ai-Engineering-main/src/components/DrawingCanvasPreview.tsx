@@ -19,6 +19,7 @@ import {
 import { DocCategory, TradeCategory, ReviewMarkup } from '../types';
 
 interface DrawingCanvasPreviewProps {
+  previewPages?: string[];
   fileDataUrl?: string;
   cadUrl?: string;
   drawingTitle?: string;
@@ -43,6 +44,7 @@ interface DrawingCanvasPreviewProps {
 }
 
 export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
+  previewPages = [],
   fileDataUrl,
   cadUrl,
   drawingTitle,
@@ -60,6 +62,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   maxHeight = '580px',
 }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState(0);
   const [showPipingLayer, setShowPipingLayer] = useState<boolean>(true);
   const [showDetectionLayer, setShowDetectionLayer] = useState<boolean>(true);
   const [showRadiusLayer, setShowRadiusLayer] = useState<boolean>(true);
@@ -74,8 +77,10 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   const rawUrl = fileDataUrl || cadUrl;
 
   // Check data format
+  const displayUrl = previewPages[currentPage] || rawUrl;
   const isPdfData =
     rawUrl &&
+    previewPages.length === 0 &&
     (rawUrl.startsWith('data:application/pdf') ||
       rawUrl.toLowerCase().endsWith('.pdf') ||
       rawUrl.includes('type=pdf'));
@@ -116,6 +121,12 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
 
   // Only render markups returned by the actual drawing review.
   const effectiveMarkups: ReviewMarkup[] = markups || [];
+  const markupTone = (markup: ReviewMarkup) => {
+    const category = `${markup.category || ''} ${markup.title || ''} ${markup.comment || ''}`;
+    if (/원가|VE|절감|cost/i.test(category)) return 'bg-emerald-600';
+    if (/안전|법규|safety/i.test(category)) return 'bg-amber-500';
+    return markup.severity === 'CRITICAL' ? 'bg-red-600' : markup.severity === 'WARNING' ? 'bg-orange-500' : 'bg-blue-600';
+  };
   /* legacy example markups removed
       [
           {
@@ -310,6 +321,13 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                 </div>
               ) : (
                 <div className="w-full h-[390px] bg-gray-50 border border-gray-200 rounded-lg p-5 relative overflow-auto font-mono text-xs text-gray-800 space-y-4 shadow-inner">
+                  {previewPages.length > 0 && (
+                    <div className="mb-2 flex items-center justify-between rounded bg-slate-900 px-2 py-1 text-[10px] text-white">
+                      <span>PDF 원본 페이지 {currentPage + 1} / {previewPages.length}</span>
+                      <span className="flex gap-1"><button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}>이전</button><button type="button" disabled={currentPage === previewPages.length - 1} onClick={() => setCurrentPage((p) => Math.min(previewPages.length - 1, p + 1))}>다음</button></span>
+                    </div>
+                  )}
+                  {previewPages.length > 0 && <img src={displayUrl} alt={`${fileName} page ${currentPage + 1}`} className="mb-3 max-h-[360px] w-full object-contain rounded border border-slate-300 bg-white" />}
                   {/* PDF Document Summary Block */}
                   <div className="bg-white p-3.5 rounded-md border border-gray-300 shadow-xs flex items-center justify-between">
                     <div>
@@ -431,7 +449,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}
           >
             <img
-              src={rawUrl}
+              src={displayUrl}
               alt="Uploaded Engineering Document"
               onError={() => setImageError(true)}
               className="max-w-full object-contain rounded shadow-2xl border border-white/20"
@@ -475,7 +493,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                   {/* Pin Circle */}
                   <div className="relative flex items-center justify-center">
                     <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-75"></span>
-                    <div className="relative inline-flex rounded-full h-8 w-8 bg-red-600 text-white font-mono font-bold text-xs items-center justify-center border-2 border-white shadow-xl hover:scale-110 transition-transform">
+                    <div className={`relative inline-flex rounded-full h-8 w-8 ${markupTone(mk)} text-white font-mono font-bold text-xs items-center justify-center border-2 border-white shadow-xl hover:scale-110 transition-transform cursor-move`}>
                       {idx + 1}
                     </div>
                   </div>

@@ -33,6 +33,7 @@ export interface OcrBlock {
 }
 
 export interface ReviewItem {
+  previewPages?: string[];
   id: string;
   fileName: string;
   fileType: string;
@@ -113,6 +114,7 @@ export interface VeItem {
 }
 
 export interface UploadFile {
+  previewPages?: string[];
   id: string;
   name: string;
   type: 'CAD' | 'PDF' | 'Spec' | 'BoQ' | 'Image';

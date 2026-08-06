@@ -46,6 +46,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [engineerNotes, setEngineerNotes] = useState<string>(selectedItem?.engineerNotes || '');
   const [currentStatus, setCurrentStatus] = useState<string>(selectedItem?.status || '오류 의심');
   const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   // Dynamic status counters based on actual review items
   const errorCount = reviewItems.filter((i) => i.status === '오류 의심' || i.status === '긴급 확인').length;
@@ -336,6 +337,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 업로드 도면 원본 ({selectedItem.fileName})
               </h5>
               <div className="flex gap-1.5">
+                <button onClick={() => setIsReportOpen(true)} className="px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded">종합 보고서</button>
                 {onOpenOcrModal && (
                   <button
                     onClick={() => onOpenOcrModal(selectedItem)}
@@ -359,6 +361,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <DrawingCanvasPreview
                 fileDataUrl={drawingDataUrl}
                 cadUrl={drawingDataUrl}
+                previewPages={selectedItem.previewPages || selectedSource?.previewPages}
                 drawingTitle={selectedItem.drawingTitle || selectedItem.fileName}
                 drawingNumber={selectedItem.drawingNumber || 'DWG-SCAN'}
                 scale={selectedItem.scale || '1 : 100'}
@@ -487,6 +490,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 검토의견 저장
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {isReportOpen && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setIsReportOpen(false)}>
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-slate-200 pb-4"><div><h2 className="text-xl font-bold text-[#000d5f]">도면 검토 종합 보고서</h2><p className="mt-1 text-xs text-slate-500">{selectedItem.fileName} · {selectedItem.updatedAt}</p></div><button onClick={() => setIsReportOpen(false)} className="text-xl">×</button></div>
+            <div className="mt-5 grid grid-cols-3 gap-3 text-center text-xs"><div className="rounded bg-red-50 p-3"><b className="block text-xl text-red-700">{(selectedItem.markups || []).filter((m) => m.severity === 'CRITICAL').length}</b>설계 오류</div><div className="rounded bg-amber-50 p-3"><b className="block text-xl text-amber-700">{(selectedItem.markups || []).filter((m) => /안전|법규/i.test(`${m.category} ${m.title}`)).length}</b>안전 검토</div><div className="rounded bg-emerald-50 p-3"><b className="block text-xl text-emerald-700">{(selectedItem.markups || []).filter((m) => /원가|VE|절감/i.test(`${m.category} ${m.title}`)).length}</b>원가절감</div></div>
+            <p className="mt-5 rounded-lg bg-slate-50 p-4 text-sm leading-7">{selectedItem.description || selectedItem.result}</p>
+            <div className="mt-4 space-y-3">{(selectedItem.markups || []).map((markup, index) => <div key={markup.id || index} className="rounded-lg border border-slate-200 p-3"><div className="flex justify-between"><b>{markup.title}</b><span className="text-xs font-bold">{markup.severity}</span></div><p className="mt-1 text-sm text-slate-600">{markup.comment}</p>{markup.codeClause && <p className="mt-1 text-xs text-slate-500">근거: {markup.codeClause}</p>}</div>)}</div>
+            <div className="mt-5 border-t border-slate-200 pt-4 text-right"><button onClick={() => window.print()} className="rounded bg-[#000d5f] px-4 py-2 text-xs font-bold text-white">보고서 인쇄 / PDF 저장</button></div>
           </div>
         </div>
       )}
