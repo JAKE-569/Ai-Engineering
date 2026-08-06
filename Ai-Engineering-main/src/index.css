@@ -80,6 +80,9 @@ header > div:first-child > span { color: #ffffff !important; letter-spacing: -0.
 header button { color: #e8f1fb; }
 header input { background: #173b68 !important; border-color: #41658d !important; color: #ffffff; }
 header input::placeholder { color: #b8c9dc; }
+header .bg-emerald-50 { color: #065f46 !important; }
+header .bg-indigo-50 { color: #3730a3 !important; }
+header .font-headline { font-family: '맑은 고딕', 'Malgun Gothic', sans-serif; font-weight: 800; letter-spacing: -0.04em; }
 main { color: #172033; }
 main h2 { color: #123b78; letter-spacing: -0.03em; }
 main h3, main h4, main h5 { letter-spacing: -0.02em; }

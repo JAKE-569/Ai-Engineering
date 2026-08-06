@@ -25,6 +25,7 @@ import { CostVeView } from './components/CostVeView';
 import { UploadView } from './components/UploadView';
 import { CadViewerModal } from './components/CadViewerModal';
 import { ReviewWorkspaceModal } from './components/ReviewWorkspaceModal';
+import { ReportView } from './components/ReportView';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { DeploySupabaseModal } from './components/DeploySupabaseModal';
 import { ChevronDown, Folder, Layers, Database, MessageCircle, X } from 'lucide-react';
@@ -274,6 +275,7 @@ export default function App() {
               searchQuery={searchQuery}
             />
           )}
+          {activeTab === 'report' && <ReportView reviewItems={reviewItems} designErrors={designErrors} safetyItems={safetyItems} veItems={veItems} />}
 
           {activeTab === 'upload' && (
             <UploadView

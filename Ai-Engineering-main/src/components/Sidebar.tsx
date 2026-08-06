@@ -86,6 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, onLogo
 
       {/* Footer / Logout */}
       <div className="pt-4 border-t border-[#c6c5d2]">
+        <button onClick={() => onSelectTab('report')} className="mb-2 flex w-full items-center gap-3 rounded-lg px-3.5 py-3 text-sm font-bold text-[#123b78] transition-all hover:bg-blue-100"><span className="material-symbols-outlined text-lg text-violet-600">description</span><span>통합 보고서 출력</span></button>
         <button
           onClick={onLogout || (() => alert('로그아웃 되었습니다.'))}
           className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[#454651] hover:text-[#ba1a1a] hover:bg-[#ffdad6] rounded-lg text-xs font-mono transition-all cursor-pointer"

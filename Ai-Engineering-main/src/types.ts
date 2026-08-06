@@ -1,4 +1,4 @@
-export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'deploy_guide';
+export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'report' | 'deploy_guide';
 
 export type DocCategory = '도면' | '시방서' | '내역서';
 export type TradeCategory = '토목' | '건축' | '건축기계' | '건축전기' | '소방';
