@@ -24,6 +24,7 @@ import { DesignErrorsView } from './components/DesignErrorsView';
 import { CostVeView } from './components/CostVeView';
 import { UploadView } from './components/UploadView';
 import { CadViewerModal } from './components/CadViewerModal';
+import { ReviewWorkspaceModal } from './components/ReviewWorkspaceModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { DeploySupabaseModal } from './components/DeploySupabaseModal';
 import { ChevronDown, Folder, Layers, Database, MessageCircle, X } from 'lucide-react';
@@ -289,8 +290,10 @@ export default function App() {
       </div>
 
       {/* CAD Drawing Overlay Viewer Modal */}
-      <CadViewerModal
+      <ReviewWorkspaceModal
         errorItem={cadModalErrorItem}
+        uploadFiles={uploadFiles}
+        reviewItems={reviewItems}
         onClose={() => setCadModalErrorItem(null)}
       />
 
