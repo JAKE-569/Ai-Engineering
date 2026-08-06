@@ -651,7 +651,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="upload-status-table w-full text-left border-collapse">
               <thead className="bg-[#e6e8ea] font-mono text-xs text-[#454651]">
                 <tr>
                   <th className="px-5 py-3.5 font-semibold whitespace-nowrap min-w-[180px]">도면 / 파일명</th>
@@ -744,7 +744,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                     <td className="upload-actions px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
                       <button
                         onClick={() => onOpenCadViewer(file.name, file.drawingNumber)}
-                        className="px-2.5 py-1.5 bg-[#000d5f] text-white hover:bg-[#1a2b88] rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                        className="hidden px-2.5 py-1.5 bg-[#000d5f] text-white hover:bg-[#1a2b88] rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
                         title="CAD 도면 뷰어 구동 (레이어, 마크업, 도면 분석)"
                       >
                         <span className="material-symbols-outlined text-sm">architecture</span>
@@ -753,7 +753,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
                       <button
                         onClick={() => setPdfPreviewFile(file)}
-                        className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white border border-red-200 rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        className="hidden px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white border border-red-200 rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
                         title="PDF 문서 정밀 미리보기"
                       >
                         <FileText className="w-3.5 h-3.5" />
@@ -762,7 +762,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
                       <button
                         onClick={() => onOpenOcrModal(file)}
-                        className="px-2.5 py-1.5 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        className="hidden px-2.5 py-1.5 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
                         title="OCR 텍스트 스캔 및 레이어 확인"
                       >
                         <ScanText className="w-3.5 h-3.5" />

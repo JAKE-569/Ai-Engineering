@@ -295,18 +295,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <td className="px-6 py-4 font-body text-sm text-[#191c1e]">{item.result}</td>
                     <td className="px-6 py-4 font-body text-xs text-[#454651]">{item.updatedAt}</td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      {onOpenOcrModal && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenOcrModal(item);
-                          }}
-                          className="px-2.5 py-1 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <ScanText className="w-3.5 h-3.5" />
-                          OCR
-                        </button>
-                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -341,7 +329,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {onOpenOcrModal && (
                   <button
                     onClick={() => onOpenOcrModal(selectedItem)}
-                    className="px-3 py-1 bg-[#dfe0ff] text-[#000d5f] text-xs font-mono font-bold rounded hover:bg-[#000d5f] hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                    className="hidden px-3 py-1 bg-[#dfe0ff] text-[#000d5f] text-xs font-mono font-bold rounded hover:bg-[#000d5f] hover:text-white transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <ScanText className="w-3.5 h-3.5" />
                     OCR 레이어 스캔

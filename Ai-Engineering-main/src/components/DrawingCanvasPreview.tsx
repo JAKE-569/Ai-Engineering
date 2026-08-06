@@ -243,7 +243,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
             </button>
             <button
               onClick={() => setShowOcrLayer(!showOcrLayer)}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+              className={`hidden px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
                 showOcrLayer ? 'bg-emerald-600 text-white' : 'text-white/40 hover:text-white'
               }`}
               title="OCR 오버레이"
