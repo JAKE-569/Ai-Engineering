@@ -127,6 +127,23 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
     if (/안전|법규|safety/i.test(category)) return 'bg-amber-500';
     return markup.severity === 'CRITICAL' ? 'bg-red-600' : markup.severity === 'WARNING' ? 'bg-orange-500' : 'bg-blue-600';
   };
+  if (previewPages.length > 0) {
+    return (
+      <div className={`relative flex h-full min-h-[420px] flex-col overflow-hidden rounded-lg bg-slate-100 ${className}`}>
+        <div className="flex items-center justify-between border-b border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
+          <span className="font-semibold">PDF 원본 · {fileName}</span>
+          <div className="flex items-center gap-2"><span>{currentPage + 1} / {previewPages.length}</span><button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} className="rounded border px-2 py-1 disabled:opacity-40">이전</button><button type="button" disabled={currentPage === previewPages.length - 1} onClick={() => setCurrentPage((p) => Math.min(previewPages.length - 1, p + 1))} className="rounded border px-2 py-1 disabled:opacity-40">다음</button></div>
+        </div>
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-200 p-4">
+          <div className="relative inline-block max-h-full max-w-full shadow-xl" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}>
+            <img src={previewPages[currentPage]} alt={`${fileName} PDF ${currentPage + 1}페이지`} className="block max-h-[520px] max-w-full object-contain" />
+            {showMarkupLayer && effectiveMarkups.map((mk, index) => <button type="button" key={mk.id || index} onClick={() => setActiveMarkupId(mk.id)} className={`absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white text-[10px] font-bold text-white shadow-lg ${markupTone(mk)}`} style={{ left: `${mk.xPercent}%`, top: `${mk.yPercent}%` }}>{index + 1}</button>)}
+          </div>
+        </div>
+        {activeMarkupId && <div className="absolute bottom-3 left-3 right-3 z-30 rounded-lg border border-slate-300 bg-white/95 p-3 text-xs shadow-xl"><button type="button" onClick={() => setActiveMarkupId(null)} className="float-right text-slate-400">×</button><strong>{effectiveMarkups.find((m) => m.id === activeMarkupId)?.title}</strong><p className="mt-1 text-slate-600">{effectiveMarkups.find((m) => m.id === activeMarkupId)?.comment}</p></div>}
+      </div>
+    );
+  }
   /* legacy example markups removed
       [
           {

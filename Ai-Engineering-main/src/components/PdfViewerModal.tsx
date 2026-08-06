@@ -36,6 +36,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
 
   const fileName = 'fileName' in file ? file.fileName : file.name;
   const fileDataUrl = file.fileDataUrl || ('cadUrl' in file ? file.cadUrl : undefined);
+  const previewPages = 'previewPages' in file ? file.previewPages || [] : [];
   const docCategory: DocCategory = file.docCategory || '도면';
   const tradeCategory: TradeCategory = file.tradeCategory || '소방';
   const drawingTitle = ('drawingTitle' in file && file.drawingTitle) || fileName;
@@ -85,7 +86,15 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ file, onClose })
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 bg-[#151d2f] p-4 overflow-auto">
               <div className="relative w-full h-full min-h-[620px] bg-white rounded-lg overflow-hidden">
-                {isRealPdf ? (
+                {previewPages.length > 0 ? (
+                  <div className="flex h-full flex-col bg-slate-100">
+                    <div className="flex items-center justify-between border-b border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
+                      <span>PDF 원본 페이지 {currentPage} / {previewPages.length}</span>
+                      <div className="flex gap-2"><button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} className="rounded border px-2 py-1 disabled:opacity-40">이전</button><button type="button" disabled={currentPage >= previewPages.length} onClick={() => setCurrentPage((p) => Math.min(previewPages.length, p + 1))} className="rounded border px-2 py-1 disabled:opacity-40">다음</button></div>
+                    </div>
+                    <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4"><img src={previewPages[currentPage - 1]} alt={`${fileName} page ${currentPage}`} className="max-h-full max-w-full object-contain shadow-lg" /></div>
+                  </div>
+                ) : isRealPdf ? (
                   <object data={fileDataUrl} type="application/pdf" title={`${fileName} source PDF`} className="absolute inset-0 w-full h-full">
                     <embed src={fileDataUrl} type="application/pdf" className="w-full h-full" />
                   </object>
