@@ -26,7 +26,7 @@ import { UploadView } from './components/UploadView';
 import { CadViewerModal } from './components/CadViewerModal';
 import { OcrReviewModal } from './components/OcrReviewModal';
 import { DeploySupabaseModal } from './components/DeploySupabaseModal';
-import { ChevronDown, Folder, Layers, Database } from 'lucide-react';
+import { ChevronDown, Folder, Layers, Database, MessageCircle, X } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('dashboard');
@@ -58,6 +58,7 @@ export default function App() {
   const [isDeployModalOpen, setIsDeployModalOpen] = useState<boolean>(false);
   const [cadModalErrorItem, setCadModalErrorItem] = useState<DesignErrorItem | null>(null);
   const [ocrModalFile, setOcrModalFile] = useState<UploadFile | ReviewItem | null>(null);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
 
   const handleSaveSupabaseConfig = (url: string, anonKey: string) => {
     saveSupabaseConfig(url, anonKey);
@@ -96,6 +97,7 @@ export default function App() {
             ? foundError.markups
             : foundReview?.markups || foundUpload?.markups,
         fileDataUrl: foundError.fileDataUrl || foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundError.cadUrl,
+        previewPages: foundError.previewPages || foundReview?.previewPages || foundUpload?.previewPages,
         cadUrl: foundError.cadUrl || foundReview?.fileDataUrl || foundUpload?.fileDataUrl,
       });
     } else {
@@ -119,6 +121,7 @@ export default function App() {
             : 'Structural',
         severity: 'CRITICAL',
         fileDataUrl: foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundReview?.cadUrl,
+        previewPages: foundReview?.previewPages || foundUpload?.previewPages,
         cadUrl: foundReview?.fileDataUrl || foundUpload?.fileDataUrl || foundReview?.cadUrl,
         ocrBlocks: foundReview?.ocrBlocks || foundUpload?.ocrBlocks,
         markups: foundReview?.markups || foundUpload?.markups,
@@ -295,6 +298,11 @@ export default function App() {
         onSaveConfig={handleSaveSupabaseConfig}
         onSyncDataToSupabase={handleSyncToSupabase}
       />
+
+      <div className="fixed bottom-6 right-6 z-[90]">
+        {isAssistantOpen && <div className="mb-3 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="flex items-center justify-between border-b pb-3"><div><b className="text-[#000d5f]">설계 도우미</b><p className="text-[11px] text-slate-500">도면 검토 결과를 질문하세요.</p></div><button onClick={() => setIsAssistantOpen(false)}><X className="h-4 w-4" /></button></div><p className="py-5 text-xs leading-relaxed text-slate-600">현재 선택된 도면의 OCR, 설계 오류, 안전 검토, 원가절감 의견을 바탕으로 답변할 수 있습니다.</p><button onClick={() => setActiveTab('dashboard')} className="w-full rounded-lg bg-[#000d5f] py-2 text-xs font-bold text-white">검토 결과 열기</button></div>}
+        <button onClick={() => setIsAssistantOpen((open) => !open)} className="flex h-14 w-14 items-center justify-center rounded-full bg-[#000d5f] text-white shadow-xl ring-4 ring-white hover:bg-blue-900" aria-label="설계 도우미 열기"><MessageCircle className="h-6 w-6" /></button>
+      </div>
     </div>
   );
 }

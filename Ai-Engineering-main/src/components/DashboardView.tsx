@@ -89,7 +89,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Safety & Law */}
         <div
           onClick={() => onSelectTab('safety')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="bg-blue-50 border border-blue-200 p-5 rounded-xl hover:border-blue-500 transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
@@ -123,7 +123,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Engineering Errors */}
         <div
           onClick={() => onSelectTab('errors')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="bg-red-50 border border-red-200 p-5 rounded-xl hover:border-red-500 transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
@@ -157,7 +157,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Cost & VE */}
         <div
           onClick={() => onSelectTab('cost_ve')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl hover:border-emerald-500 transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">

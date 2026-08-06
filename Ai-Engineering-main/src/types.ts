@@ -75,6 +75,7 @@ export interface SafetyItem {
 }
 
 export interface DesignErrorItem {
+  previewPages?: string[];
   id: string;
   errorCode: string;
   dwgFile: string;

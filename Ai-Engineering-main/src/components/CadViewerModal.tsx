@@ -41,7 +41,7 @@ export const CadViewerModal: React.FC<CadViewerModalProps> = ({ errorItem, onClo
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-[#000d5f] text-xl">architecture</span>
             <span className="font-headline font-bold text-sm text-[#191c1e]">
-              Integrated CAD Viewer - {errorItem.dwgFile}
+              PDF 도면 검토 뷰어 - {errorItem.dwgFile}
             </span>
             <span className="bg-[#000d5f] text-white text-[10px] font-mono px-2 py-0.5 rounded">
               {errorItem.errorCode}
@@ -60,7 +60,8 @@ export const CadViewerModal: React.FC<CadViewerModalProps> = ({ errorItem, onClo
         <div className="flex-1 bg-[#0a111e] relative overflow-hidden flex flex-col items-center justify-center p-3 select-none">
           {/* Blueprint Image & Interactive CAD Stage */}
           <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded">
-            <DrawingCanvasPreview
+              <DrawingCanvasPreview
+              previewPages={errorItem.previewPages}
               fileDataUrl={errorItem.fileDataUrl}
               cadUrl={errorItem.cadUrl}
               drawingTitle={errorItem.drawingTitle || errorItem.dwgFile}
