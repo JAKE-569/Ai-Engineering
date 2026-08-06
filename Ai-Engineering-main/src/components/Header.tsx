@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
           POSCO AI Doc Review
         </span>
 
-        <nav className="hidden md:flex gap-4 lg:gap-6 font-body text-sm">
+        <nav className="hidden">
           <button
             onClick={() => onSelectTab('dashboard')}
             className={`transition-colors py-1 px-2 rounded font-medium ${

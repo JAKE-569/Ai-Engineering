@@ -28,6 +28,7 @@ export const CostVeView: React.FC<CostVeViewProps> = ({
   const [selectedTrade, setSelectedTrade] = useState<string>('ALL');
   const [localSearch, setLocalSearch] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [selectedVeItem, setSelectedVeItem] = useState<VeItem | null>(null);
 
   // Form State for Adding New VE Idea
   const [newTrade, setNewTrade] = useState<TradeCategory>('소방');
@@ -47,6 +48,8 @@ export const CostVeView: React.FC<CostVeViewProps> = ({
   const effectiveVeItems: VeItem[] =
     combinedVeItems.length > 0
       ? combinedVeItems
+      : []
+      /*
       : [
           {
             id: 've-1',
@@ -128,7 +131,7 @@ export const CostVeView: React.FC<CostVeViewProps> = ({
             calculationBasis: '습식 양생 기간 제거(-9일), 하중 경감에 따른 슬래브 보강 비용 1,500만원 동시 절감',
             status: '검토대기',
           },
-        ];
+        ]; */
 
   const query = localSearch || searchQuery;
 
@@ -506,6 +509,9 @@ export const CostVeView: React.FC<CostVeViewProps> = ({
                         >
                           {item.status}
                         </span>
+                        <button type="button" onClick={() => setSelectedVeItem(item)} className="mt-2 rounded-md border border-[#000d5f] px-2 py-1 text-[10px] font-bold text-[#000d5f] hover:bg-[#000d5f] hover:text-white">
+                          세부 내역
+                        </button>
                       </td>
                     </tr>
                   );
@@ -515,6 +521,24 @@ export const CostVeView: React.FC<CostVeViewProps> = ({
           </div>
         )}
       </div>
+
+      {selectedVeItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelectedVeItem(null)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between border-b border-slate-200 pb-3">
+              <div><h3 className="text-lg font-bold text-[#000d5f]">원가절감 세부 산출내역</h3><p className="mt-1 text-xs text-slate-500">{selectedVeItem.description}</p></div>
+              <button type="button" onClick={() => setSelectedVeItem(null)} className="text-xl text-slate-400">×</button>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center text-xs">
+              <div className="rounded-lg bg-slate-50 p-3">기존 비용<strong className="block text-base">₩{(selectedVeItem.beforeCostKw || selectedVeItem.impactKw * 4).toLocaleString()}</strong></div>
+              <div className="rounded-lg bg-blue-50 p-3">변경 비용<strong className="block text-base text-[#000d5f]">₩{(selectedVeItem.afterCostKw || selectedVeItem.impactKw * 3).toLocaleString()}</strong></div>
+              <div className="rounded-lg bg-emerald-50 p-3">예상 절감액<strong className="block text-base text-emerald-700">₩{selectedVeItem.impactKw.toLocaleString()}</strong></div>
+            </div>
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm"><strong>산출 근거</strong><p className="mt-2 text-slate-700">{selectedVeItem.calculationBasis || 'AI 검토 결과에 산출 근거가 포함되지 않았습니다.'}</p></div>
+            {selectedVeItem.detailItems && selectedVeItem.detailItems.length > 0 && <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-100"><tr><th className="p-2">항목</th><th className="p-2">수량</th><th className="p-2">단가</th><th className="p-2">금액</th><th className="p-2">계산식</th></tr></thead><tbody>{selectedVeItem.detailItems.map((detail, index) => <tr key={`${detail.label}-${index}`} className="border-b border-slate-100"><td className="p-2">{detail.label}</td><td className="p-2">{detail.quantity || '-'}</td><td className="p-2">{detail.unitPrice ? `₩${detail.unitPrice.toLocaleString()}` : '-'}</td><td className="p-2">{detail.amount ? `₩${detail.amount.toLocaleString()}` : '-'}</td><td className="p-2 text-slate-500">{detail.formula || '-'}</td></tr>)}</tbody></table></div>}
+          </div>
+        </div>
+      )}
 
       {/* Add Custom VE Idea Modal */}
       {showAddModal && (

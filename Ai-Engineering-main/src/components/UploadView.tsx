@@ -339,6 +339,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         const veBase = apiResult?.veItems?.[0];
         const newVeItem: VeItem = {
+          detailItems: Array.isArray(veBase?.detailItems) ? veBase.detailItems : undefined,
           id: veBase?.id || `ve-${uniqueId}`,
           type: veBase?.type || 'VE 제안',
           docCategory: selectedDocCategory,

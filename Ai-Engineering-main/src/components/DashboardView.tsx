@@ -40,6 +40,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [selectedItemId, setSelectedItemId] = useState<string>(reviewItems[0]?.id || '');
   const selectedItem = reviewItems.find((item) => item.id === selectedItemId) || reviewItems[0];
+  const selectedSource = selectedItem ? uploadFiles.find((file) => file.name === selectedItem.fileName) : undefined;
+  const drawingDataUrl = selectedItem?.fileDataUrl || selectedItem?.cadUrl || selectedSource?.fileDataUrl;
 
   const [engineerNotes, setEngineerNotes] = useState<string>(selectedItem?.engineerNotes || '');
   const [currentStatus, setCurrentStatus] = useState<string>(selectedItem?.status || '오류 의심');
@@ -355,8 +357,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="flex-1 bg-[#1A1A1A] relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
               <DrawingCanvasPreview
-                fileDataUrl={selectedItem.fileDataUrl}
-                cadUrl={selectedItem.cadUrl}
+                fileDataUrl={drawingDataUrl}
+                cadUrl={drawingDataUrl}
                 drawingTitle={selectedItem.drawingTitle || selectedItem.fileName}
                 drawingNumber={selectedItem.drawingNumber || 'DWG-SCAN'}
                 scale={selectedItem.scale || '1 : 100'}

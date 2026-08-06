@@ -93,6 +93,7 @@ export interface DesignErrorItem {
 }
 
 export interface VeItem {
+  detailItems?: { label: string; quantity?: string; unitPrice?: number; amount?: number; formula?: string }[];
   id: string;
   type: 'VE 제안' | '수량 오류';
   docCategory?: DocCategory;
@@ -135,4 +136,3 @@ export interface SupabaseConfig {
   anonKey: string;
   isConnected: boolean;
 }
-
