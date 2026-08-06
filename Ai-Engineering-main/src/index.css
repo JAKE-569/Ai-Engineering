@@ -3,8 +3,8 @@
 @layer base {
   body {
     font-family: '맑은 고딕', 'Malgun Gothic', sans-serif;
-    background-color: #f7f9fb;
-    color: #191c1e;
+    background-color: #eef3f8;
+    color: #172033;
     word-break: keep-all;
     overflow-wrap: break-word;
   }
@@ -73,3 +73,19 @@
 .animate-pulse-ring {
   animation: pulse-ring 2s infinite ease-in-out;
 }
+
+/* FutureM engineering console visual system */
+header { background: #0f2d55 !important; border-color: #23476f !important; color: #ffffff; }
+header > div:first-child > span { color: #ffffff !important; letter-spacing: -0.02em; }
+header button { color: #e8f1fb; }
+header input { background: #173b68 !important; border-color: #41658d !important; color: #ffffff; }
+header input::placeholder { color: #b8c9dc; }
+main { color: #172033; }
+main h2 { color: #123b78; letter-spacing: -0.03em; }
+main h3, main h4, main h5 { letter-spacing: -0.02em; }
+button { font-family: '맑은 고딕', 'Malgun Gothic', sans-serif; }
+table thead { background: #dbe7f3 !important; color: #17385f !important; }
+table th { font-weight: 800; letter-spacing: -0.02em; }
+table tbody tr:hover { background: #edf5ff !important; }
+input, select, textarea { border-color: #b9c8d9 !important; }
+input:focus, select:focus, textarea:focus { border-color: #2c6ebd !important; box-shadow: 0 0 0 3px rgba(44,110,189,0.14); }
