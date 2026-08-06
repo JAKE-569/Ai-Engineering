@@ -95,21 +95,25 @@ export const UploadView: React.FC<UploadViewProps> = ({
     });
   };
 
-  const renderPdfFirstPageAsImage = async (pdfDataUrl: string): Promise<string> => {
+  const renderPdfPagesAsImages = async (pdfDataUrl: string): Promise<string[]> => {
     const base64 = pdfDataUrl.split(',')[1] || '';
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
     const pdf = await pdfjsLib.getDocument({ data: bytes, disableWorker: true } as any).promise;
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 2.5 });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Unable to create PDF rendering canvas');
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
-    return canvas.toDataURL('image/png');
+    const pages: string[] = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Unable to create PDF rendering canvas');
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      pages.push(canvas.toDataURL('image/png'));
+    }
+    return pages;
   };
 
   const processBatchFiles = async (filesList: FileList | File[]) => {
@@ -143,15 +147,18 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         const sizeMB = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1;
 
-        let reviewDataUrl = fileDataUrl;
+        let reviewPages = [fileDataUrl];
         let reviewMimeType = file.type || 'image/png';
         if (fileType === 'PDF') {
           setProcessingStatus(`[${i + 1}/${files.length}] PDF 1페이지를 이미지로 변환하여 NVIDIA Vision 검토 중...`);
-          reviewDataUrl = await renderPdfFirstPageAsImage(fileDataUrl);
+          reviewPages = await renderPdfPagesAsImages(fileDataUrl);
           reviewMimeType = 'image/png';
         }
 
-        let apiResult = null;
+        let apiResult: any = null;
+        for (let pageIndex = 0; pageIndex < reviewPages.length; pageIndex += 1) {
+          const reviewDataUrl = reviewPages[pageIndex];
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} page ${pageIndex + 1}/${reviewPages.length} Gemini Vision review...`);
         try {
           const controller = new AbortController();
           const timeoutId = window.setTimeout(() => controller.abort(), 90000);
@@ -161,6 +168,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
             signal: controller.signal,
             body: JSON.stringify({
               fileName: file.name,
+              pageNumber: pageIndex + 1,
+              totalPages: reviewPages.length,
               mimeType: reviewMimeType,
               base64Data: reviewDataUrl,
               docCategory: selectedDocCategory,
@@ -170,12 +179,22 @@ export const UploadView: React.FC<UploadViewProps> = ({
           window.clearTimeout(timeoutId);
           const data = await response.json();
           if (data.success && data.data) {
-            apiResult = data.data;
+            const pageResult = data.data;
+            apiResult = apiResult || {};
+            apiResult.drawingTitle ||= pageResult.drawingTitle;
+            apiResult.drawingNumber ||= pageResult.drawingNumber;
+            apiResult.scale ||= pageResult.scale;
+            apiResult.rawOcrText = [apiResult.rawOcrText, pageResult.rawOcrText ? `[Page ${pageIndex + 1}]\n${pageResult.rawOcrText}` : ''].filter(Boolean).join('\n');
+            for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designErrors', 'safetyItems', 'veItems']) {
+              apiResult[key] = [...(apiResult[key] || []), ...(pageResult[key] || [])].map((item: any) => ({ ...item, pageNumber: item.pageNumber || pageIndex + 1 }));
+            }
+            apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
           } else {
             throw new Error(data.error || 'AI visual drawing review failed');
           }
         } catch (err) {
           console.error('API OCR Review call error:', err);
+        }
         }
 
         // Keep the uploaded source available even when the external vision service
