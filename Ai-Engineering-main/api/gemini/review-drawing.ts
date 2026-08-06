@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   "docCategory":"${docCategory}", "tradeCategory":"${tradeCategory}",
   "rawOcrText":"string",
   "ocrBlocks":[{"id":"b1","text":"string","category":"title|dimension|note|symbol|safety","confidence":0}],
-  "visualFindings":[{"id":"vf1","finding":"PASS|VERIFY|defect: concise finding","evidence":"visible evidence","xPercent":50,"yPercent":50,"confidence":0}],
+  "visualFindings":[{"id":"vf1","finding":"PASS|VERIFY|defect: concise finding","evidence":"visible evidence","pageNumber":1,"xPercent":50,"yPercent":50,"confidence":0}],
   "reviewSummary":{"status":"오류 의심|주의|정상|기준 확인","result":"string","description":"string"},
   "designErrors":[{"id":"err-1","errorCode":"ERR-001","dwgFile":"${fileName}","description":"string","type":"Structural|Electrical|Mechanical|Civil|Architectural|Fire|Other","severity":"CRITICAL|WARNING|INFO","suggestedFix":"string"}],
   "markups":[{"id":"m1","xPercent":50,"yPercent":50,"title":"string","comment":"string","category":"DESIGN_ERROR|SAFETY|COST_VE","codeClause":"string","severity":"CRITICAL|WARNING|INFO"}],

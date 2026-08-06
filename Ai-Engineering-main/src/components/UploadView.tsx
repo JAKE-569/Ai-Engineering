@@ -371,9 +371,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         onAddUploadFile(newUploadFile, {
           reviewItem: newReviewItem,
-          designError: newDesignError,
-          safetyItem: newSafetyItem,
-          veItem: newVeItem,
+          designError: errorBase ? newDesignError : undefined,
+          safetyItem: safetyBase ? newSafetyItem : undefined,
+          veItem: veBase ? newVeItem : undefined,
         });
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
