@@ -38,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onSelectTab('dashboard')}
           className="font-headline text-lg md:text-xl font-bold text-[#000d5f] cursor-pointer hover:opacity-85 transition-opacity whitespace-nowrap"
         >
-          POSCO AI Doc Review
+          FutureM Ai ENG
         </span>
 
         <nav className="hidden">

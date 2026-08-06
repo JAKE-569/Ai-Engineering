@@ -12,7 +12,7 @@ export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, 
   const selectedUpload = uploadFiles.find((file) => file.name === selectedId) || uploadFiles[0];
   const selectedReview = reviewItems.find((item) => item.fileName === selectedId) || reviewItems.find((item) => item.fileName === errorItem?.dwgFile);
   const source = selectedUpload || selectedReview;
-  const markups = selectedReview?.markups || errorItem?.markups || [];
+  const markups = Array.from(new Map([...(selectedReview?.markups || []), ...(errorItem?.markups || []), ...(selectedUpload?.markups || [])].map((markup, index) => [markup.id || `markup-${index}`, markup])).values());
   const activeMarkup = markups.find((markup) => markup.id === selectedMarkupId) || markups[0];
   const documents = useMemo(() => uploadFiles.filter((file) => file.name.toLowerCase().includes(query.toLowerCase())), [uploadFiles, query]);
   if (!errorItem) return null;

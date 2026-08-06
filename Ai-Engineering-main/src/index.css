@@ -28,6 +28,7 @@
   aside nav button { font-weight: 700; }
   .upload-actions button { height: 34px; vertical-align: middle; }
   .upload-actions .material-symbols-outlined, .upload-actions svg { width: 16px; height: 16px; font-size: 16px; flex: 0 0 16px; }
+  main h3 > .material-symbols-outlined { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,0.72); box-shadow: 0 2px 6px rgba(15,23,42,0.12); }
 }
 
 .material-symbols-outlined {
