@@ -83,6 +83,10 @@ header input::placeholder { color: #b8c9dc; }
 header .bg-emerald-50 { color: #065f46 !important; }
 header .bg-indigo-50 { color: #3730a3 !important; }
 header .font-headline { font-family: '맑은 고딕', 'Malgun Gothic', sans-serif; font-weight: 800; letter-spacing: -0.04em; }
+.review-workspace-header h2, .review-workspace-header p { color: inherit !important; }
+.review-workspace-header button { color: #dbeafe !important; }
+.review-workspace-header button:hover { background: rgba(255,255,255,0.12) !important; }
+main h3 > .material-symbols-outlined { margin-right: 2px; }
 main { color: #172033; }
 main h2 { color: #123b78; letter-spacing: -0.03em; }
 main h3, main h4, main h5 { letter-spacing: -0.02em; }

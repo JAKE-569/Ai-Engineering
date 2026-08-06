@@ -748,7 +748,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                         title="CAD 도면 뷰어 구동 (레이어, 마크업, 도면 분석)"
                       >
                         <span className="material-symbols-outlined text-sm">architecture</span>
-                        도면 보기
+                        도면 워크스페이스
                       </button>
 
                       <button

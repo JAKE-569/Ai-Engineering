@@ -19,7 +19,7 @@ export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, 
 
   return <div className="fixed inset-0 z-[120] bg-slate-950/80 p-3 md:p-6">
     <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-5">
+      <header className="review-workspace-header flex h-16 shrink-0 items-center justify-between border-b border-blue-900 bg-[#0f2d55] px-5 text-white">
         <div><h2 className="text-base font-bold text-slate-900">도면 검토 워크스페이스</h2><p className="text-xs text-slate-500">{source?.name || errorItem.dwgFile} · 실제 업로드 원본</p></div>
         <button onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
       </header>
