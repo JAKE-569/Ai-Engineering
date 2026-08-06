@@ -123,12 +123,14 @@ export const UploadView: React.FC<UploadViewProps> = ({
     if (files.length === 0) return;
 
     setIsProcessing(true);
-    setBatchProgress({ current: 0, total: files.length });
+    let completedUnits = 0;
+    let totalUnits = files.length;
+    setBatchProgress({ current: 0, total: totalUnits });
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       let sourceDataUrl = '';
-      setBatchProgress({ current: i + 1, total: files.length });
+      setBatchProgress({ current: completedUnits, total: totalUnits });
       setProcessingStatus(
         `[${i + 1}/${files.length}] "${file.name}" Gemini Vision OCR 및 ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
       );
@@ -154,6 +156,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
         if (fileType === 'PDF') {
           setProcessingStatus(`[${i + 1}/${files.length}] PDF 1페이지를 이미지로 변환하여 NVIDIA Vision 검토 중...`);
           reviewPages = await renderPdfPagesAsImages(fileDataUrl);
+          totalUnits += reviewPages.length - 1;
+          setBatchProgress({ current: completedUnits, total: totalUnits });
           reviewMimeType = 'image/png';
         }
 
@@ -181,6 +185,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
           window.clearTimeout(timeoutId);
           const data = await response.json();
           if (data.success && data.data) {
+            completedUnits += 1;
+            setBatchProgress({ current: completedUnits, total: totalUnits });
             onAiUsageEvent({ success: true, model: data.model });
             const pageResult = data.data;
             apiResult = apiResult || {};
@@ -199,6 +205,11 @@ export const UploadView: React.FC<UploadViewProps> = ({
         } catch (err) {
           if (!(err instanceof Error && err.name === 'AbortError')) onAiUsageEvent({ success: false });
           console.error('API OCR Review call error:', err);
+        }
+
+        if (fileType !== 'PDF') {
+          completedUnits += 1;
+          setBatchProgress({ current: completedUnits, total: totalUnits });
         }
         }
 

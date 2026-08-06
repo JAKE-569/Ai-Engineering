@@ -352,7 +352,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   className="px-3 py-1 bg-[#000d5f] text-white text-xs font-mono font-bold rounded hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-sm">visibility</span>
-                  CAD 뷰어
+                  PDF 도면 보기
                 </button>
               </div>
             </div>
