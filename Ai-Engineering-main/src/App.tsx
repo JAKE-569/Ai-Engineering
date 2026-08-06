@@ -59,6 +59,16 @@ export default function App() {
   const [cadModalErrorItem, setCadModalErrorItem] = useState<DesignErrorItem | null>(null);
   const [ocrModalFile, setOcrModalFile] = useState<UploadFile | ReviewItem | null>(null);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
+    { role: 'assistant', text: '도면 검토 결과에 대해 질문해 주세요. 현재 세션의 검토 데이터만 기준으로 답변합니다.' },
+  ]);
+  const sendAssistantMessage = () => {
+    const text = assistantInput.trim();
+    if (!text) return;
+    setAssistantMessages((messages) => [...messages, { role: 'user', text }, { role: 'assistant', text: '현재 선택된 도면의 검토 결과·OCR·주석 데이터를 확인해 답변하는 기능을 준비 중입니다. 우선 대시보드의 종합 보고서에서 근거를 확인해 주세요.' }]);
+    setAssistantInput('');
+  };
 
   const handleSaveSupabaseConfig = (url: string, anonKey: string) => {
     saveSupabaseConfig(url, anonKey);
@@ -300,7 +310,7 @@ export default function App() {
       />
 
       <div className="fixed bottom-6 right-6 z-[90]">
-        {isAssistantOpen && <div className="mb-3 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="flex items-center justify-between border-b pb-3"><div><b className="text-[#000d5f]">설계 도우미</b><p className="text-[11px] text-slate-500">도면 검토 결과를 질문하세요.</p></div><button onClick={() => setIsAssistantOpen(false)}><X className="h-4 w-4" /></button></div><p className="py-5 text-xs leading-relaxed text-slate-600">현재 선택된 도면의 OCR, 설계 오류, 안전 검토, 원가절감 의견을 바탕으로 답변할 수 있습니다.</p><button onClick={() => setActiveTab('dashboard')} className="w-full rounded-lg bg-[#000d5f] py-2 text-xs font-bold text-white">검토 결과 열기</button></div>}
+        {isAssistantOpen && <div className="mb-3 flex h-[430px] w-[360px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between border-b bg-[#101a2e] p-4 text-white"><div><b>설계 도우미</b><p className="text-[11px] text-slate-300">AI 도면 검토 채팅</p></div><button onClick={() => setIsAssistantOpen(false)}><X className="h-4 w-4" /></button></div><div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-3">{assistantMessages.map((message, index) => <div key={index} className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-5 ${message.role === 'user' ? 'ml-auto bg-[#000d5f] text-white' : 'bg-white text-slate-700 shadow-sm'}`}>{message.text}</div>)}</div><div className="flex gap-2 border-t bg-white p-3"><input value={assistantInput} onChange={(e) => setAssistantInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendAssistantMessage()} placeholder="검토 결과에 대해 질문" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-[#000d5f]" /><button onClick={sendAssistantMessage} className="rounded-lg bg-[#000d5f] px-3 text-xs font-bold text-white">전송</button></div></div>}
         <button onClick={() => setIsAssistantOpen((open) => !open)} className="flex h-14 w-14 items-center justify-center rounded-full bg-[#000d5f] text-white shadow-xl ring-4 ring-white hover:bg-blue-900" aria-label="설계 도우미 열기"><MessageCircle className="h-6 w-6" /></button>
       </div>
     </div>
