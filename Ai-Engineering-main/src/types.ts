@@ -21,6 +21,10 @@ export interface ReviewMarkup {
   title: string;
   comment: string;
   codeClause?: string;
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
+  correctiveAction?: string;
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
   category?: string;
 }
@@ -70,6 +74,10 @@ export interface SafetyItem {
   severity: '위험' | '주의' | '정상';
   status: string;
   details?: string;
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
+  requiredConfirmation?: string;
   cadUrl?: string;
   fileDataUrl?: string;
   markups?: ReviewMarkup[];
@@ -112,6 +120,9 @@ export interface VeItem {
   savingsRate?: number; // 절감률 (%)
   scheduleDays?: number; // 공기 영향 (일)
   calculationBasis?: string; // 세부 산출 근거
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
   unitPriceComparison?: string; // 단가 비교 요약
 }
 

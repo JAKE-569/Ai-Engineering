@@ -38,7 +38,7 @@ async function startServer() {
   // API Endpoint: Perform OCR and AI Engineering Review by Trade & Document Category
   app.post("/api/gemini/review-drawing", async (req, res) => {
     try {
-      const { fileName, mimeType, base64Data, docCategory = "도면", tradeCategory = "소방" } = req.body;
+      const { fileName, mimeType, base64Data, pageNumber = 1, totalPages = 1, docCategory = "도면", tradeCategory = "소방" } = req.body;
 
       if (!fileName) {
         return res.status(400).json({ error: "File name is required" });
@@ -80,6 +80,8 @@ For every checklist item return PASS, FAIL, or NEEDS_CONFIRMATION. Cite visible/
           const promptText = `
 You are a Lead Senior Engineering Reviewer & Professional Engineer (수석 엔지니어 / 기술사) specialized in **${tradeCategory}** engineering and **${docCategory}** review for POSCO Industrial & Plant Facilities.
 Analyze this uploaded document file ("${fileName}").
+
+This is page ${pageNumber} of ${totalPages}. Preserve this page number in every finding. Check title block, project identifiers, floor/area/use, revision and drawing number against visible content. If a cross-page comparison cannot be proven from this page, mark it NEEDS_CONFIRMATION rather than assuming consistency.
 
 ${fireReviewChecklist}
 
@@ -136,6 +138,11 @@ Return ONLY valid JSON matching this exact structure:
       "type": "Mechanical" | "Electrical" | "Structural" | "Civil" | "Architectural" | "Fire" | "Other",
       "severity": "CRITICAL" | "WARNING" | "INFO",
       "suggestedFix": "Concrete engineering fix proposal with specific numerical values"
+      ,"findingStatus": "PASS" | "FAIL" | "NEEDS_CONFIRMATION",
+      "evidence": "Observed evidence from the supplied drawing/document",
+      "legalBasis": "Applicable law, code clause, technical standard, or 'Not verifiable from supplied document'",
+      "confidence": 85,
+      "requiredConfirmation": "Additional drawing/calculation/site information required, or empty string"
     }
   ],
   "markups": [
@@ -146,7 +153,13 @@ Return ONLY valid JSON matching this exact structure:
       "title": "검토 지적 위치 1",
       "comment": "Specific error or review comment on this drawing/document region",
       "codeClause": "Relevant Code (e.g. KDS / KEC / NFTC)",
-      "severity": "CRITICAL"
+      "severity": "CRITICAL",
+      "findingStatus": "PASS" | "FAIL" | "NEEDS_CONFIRMATION",
+      "evidence": "Exact visible evidence at this coordinate",
+      "legalBasis": "Applicable law or technical standard",
+      "confidence": 85,
+      "correctiveAction": "Concrete corrective action or confirmation request",
+      "pageNumber": ${pageNumber}
     }
   ],
   "safetyItems": [
@@ -159,7 +172,11 @@ Return ONLY valid JSON matching this exact structure:
       "lawRegulation": "Relevant Regulation",
       "severity": "위험" | "주의" | "정상",
       "status": "즉시 조치 필요 | 세부 확인 권고 | 검토 통과",
-      "details": "Detailed legal requirement explanation"
+      "details": "Detailed legal requirement explanation",
+      "findingStatus": "PASS" | "FAIL" | "NEEDS_CONFIRMATION",
+      "evidence": "Observed evidence or missing evidence",
+      "confidence": 85,
+      "requiredConfirmation": "Additional information required, or empty string"
     }
   ],
   "veItems": [
@@ -170,7 +187,10 @@ Return ONLY valid JSON matching this exact structure:
       "subDescription": "Details of cost savings and specification/quantity optimization",
       "location": "Location / Zone",
       "impactKw": 40000000,
-      "status": "검토대기"
+      "status": "검토대기",
+      "findingStatus": "PASS" | "FAIL" | "NEEDS_CONFIRMATION",
+      "evidence": "Visible quantity/specification/routing basis",
+      "calculationBasis": "Formula, quantity, unit price and assumption used for savings"
     }
   ]
 }
