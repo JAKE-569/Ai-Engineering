@@ -37,7 +37,20 @@ export interface OcrBlock {
   bbox?: { x: number; y: number; width: number; height: number };
 }
 
+export interface FireCalculationResult {
+  key: string;
+  label: string;
+  status: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  calculated?: number;
+  required?: number;
+  unit: string;
+  formula: string;
+  inputs: Record<string, number>;
+  note: string;
+}
+
 export interface ReviewItem {
+  engineeringCalculations?: FireCalculationResult[];
   previewPages?: string[];
   id: string;
   fileName: string;
@@ -127,6 +140,7 @@ export interface VeItem {
 }
 
 export interface UploadFile {
+  engineeringCalculations?: FireCalculationResult[];
   previewPages?: string[];
   id: string;
   name: string;

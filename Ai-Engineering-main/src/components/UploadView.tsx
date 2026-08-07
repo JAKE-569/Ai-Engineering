@@ -198,6 +198,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
               apiResult[key] = [...(apiResult[key] || []), ...(pageResult[key] || [])].map((item: any) => ({ ...item, pageNumber: item.pageNumber || pageIndex + 1 }));
             }
             apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
+            apiResult.calculationInputs = { ...(apiResult.calculationInputs || {}), ...(pageResult.calculationInputs || {}) };
+            apiResult.engineeringCalculations = pageResult.engineeringCalculations || apiResult.engineeringCalculations;
           } else {
             onAiUsageEvent({ success: false, rateLimited: response.status === 429 });
             throw new Error(data.error || 'AI visual drawing review failed');
@@ -267,6 +269,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           rawOcrText,
           ocrBlocks,
           markups,
+          engineeringCalculations: apiResult?.engineeringCalculations,
         };
 
         const newReviewItem: ReviewItem = {
@@ -294,6 +297,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           rawOcrText,
           ocrBlocks,
           markups,
+          engineeringCalculations: apiResult?.engineeringCalculations,
           engineerNotes: `${file.name} (${selectedTradeCategory}) - 전문 기술사 보정의견 반영 필요.`,
         };
 

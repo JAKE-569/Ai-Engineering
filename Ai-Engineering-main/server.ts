@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+import { calculateFireEngineering } from "./src/lib/fireCalculations";
 
 async function startServer() {
   const app = express();
@@ -179,7 +180,7 @@ Return ONLY valid JSON matching this exact structure:
       "requiredConfirmation": "Additional information required, or empty string"
     }
   ],
-  "veItems": [
+      "veItems": [
     {
       "id": "ve-1",
       "type": "VE 제안" | "수량 오류",
@@ -192,7 +193,13 @@ Return ONLY valid JSON matching this exact structure:
       "evidence": "Visible quantity/specification/routing basis",
       "calculationBasis": "Formula, quantity, unit price and assumption used for savings"
     }
-  ]
+      ]
+      ,"calculationInputs": {
+        "sprinklerFlowLpm": 0, "simultaneousSprinklers": 0, "hydrantFlowLpm": 0, "simultaneousHydrants": 0,
+        "requiredRuntimeMin": 0, "availableTankL": 0, "staticHeadM": 0, "frictionLossM": 0,
+        "fittingLossM": 0, "terminalPressureM": 0, "smokeAreaM2": 0, "smokeAirChangesPerHour": 0,
+        "emergencyLoadsKw": 0, "generatorCapacityKw": 0
+      }
 }
 `;
 
@@ -694,7 +701,9 @@ Return ONLY valid JSON matching this exact structure:
       }
       */
 
-      return res.json({ success: true, data: ocrResult });
+      const calculationInputs = ocrResult?.calculationInputs || {};
+      const engineeringCalculations = tradeCategory === "소방" ? calculateFireEngineering(calculationInputs) : [];
+      return res.json({ success: true, data: { ...ocrResult, engineeringCalculations } });
     } catch (err: any) {
       console.error("Review drawing endpoint error:", err);
       return res.status(500).json({ error: err.message || "Failed to analyze drawing" });
