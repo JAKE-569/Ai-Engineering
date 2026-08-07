@@ -63,9 +63,25 @@ async function startServer() {
             (effectiveMime.startsWith("image/") || effectiveMime === "application/pdf") &&
             !effectiveMime.includes("svg");
 
+          const fireReviewChecklist = tradeCategory === "소방" ? `
+FIRE PROTECTION REVIEW CHECKLIST (mandatory):
+1. Submission completeness: project name/address/site-building-floor identifiers; construction type; permit/application date and applicable code date; revision consistency across all disciplines; required explanations, calculations, schematics, plans, details, equipment schedules, specifications and BOQ; designer qualification/seal; performance-based-design/approval status; and special hazards including hazardous materials, gas, generator, ESS, kitchen, PV and EV charging.
+2. Legal applicability: building use and specific fire-protection-object classification; mixed-use areas/occupants; gross area, floors, basements, windowless floors, roof, evacuation floor and parking consistency; building separation/shared fire-control room/water-source assumptions; required systems by use/area/floors; accessibility provisions; existing-building exceptions; and fire-consent submission scope including Fire Facilities Act Enforcement Rule Article 3.
+3. Architectural coordination: fire compartments, fire doors/shutters/dampers, egress stairs/refuges/smoke-control zones, fire-truck access and fire department connections, fire-control room control scope, ceiling/beam/duct/light/louver obstructions, penetration firestopping, and tenant-fit-out relocation principles.
+4. Water systems: demand water quantity, simultaneous use, flow/pressure/runtime, storage duplication/omission, pump head including friction/elevation/terminal pressure/fittings, pump start/stop logic, pump-room access/drainage/freezing/flood protection/emergency power, pipe sizing/velocity/support/seismic scope, zoning/PRV/test-drain/end-test provisions; hydrant hose/nozzle reach and cabinet conflicts; sprinkler hazard classification, head type/spacing/area, obstructions, concealed/void/canopy/ramp/mechanical/electrical/parking omissions, alarm/check valves and test access, and high-rack/high-ceiling/cold-storage/large-space design.
+5. Special suppression and life safety: agent selection for generator/transformer/UPS/server/kitchen/hazardous areas; gas enclosure volume/openings/leak compensation/discharge time/pressure relief/asphyxiation warning and release interlocks; fire alarm receiver capacity/spare circuits, detector suitability, manual stations/sounders, zone/address consistency, automatic notification, emergency broadcasting, exit/corridor/accessibility lighting visibility, emergency power duration/transfer and accessible-user visual/audible alarms.
+6. Smoke control/fire-fighting water: smoke-control targets/method against egress plans, airflow/pressure/dampers/fans/ducts/intake-exhaust separation, interlocks with HVAC/elevators/shutters/broadcasting, standpipe inlets/outlets/pressure/firefighter access, hydrant/emergency equipment/tank applicability and access.
+7. Electrical/mechanical cause-and-effect: emergency power, generator capacity including starting current and simultaneous fire loads, and a complete cause-and-effect matrix for receiver, pumps, smoke fans, dampers, HVAC, elevators, electrical shutdown, shutters and emergency broadcasting. Check automatic/manual/local-priority controls and HVAC/smoke-control conflicts.
+8. Constructability/maintenance: inspection/replacement clearances, equipment delivery paths, valve/flow/zone labels, freeze/condensation/corrosion/flood/vibration/noise/impact protection, access panels and post-completion testing/repair feasibility.
+Immediate reject/supplement flags: architecture/fire mismatch in floor/area/use/compartments; missing code date or system schedule; missing/inconsistent water/pump/sprinkler calculations; missing smoke-control airflow/pressure/damper/interlock data; head/detector/exit-light clashes; unresolved egress/fire-control-room/fire-truck coordination; missing emergency power/cause-and-effect matrix; unclear firestopping/damper responsibility; or unsupported special-hazard agent selection.
+For every checklist item return PASS, FAIL, or NEEDS_CONFIRMATION. Cite visible/document evidence. Never mark PASS merely because an item is not visible; use NEEDS_CONFIRMATION.
+` : '';
+
           const promptText = `
 You are a Lead Senior Engineering Reviewer & Professional Engineer (수석 엔지니어 / 기술사) specialized in **${tradeCategory}** engineering and **${docCategory}** review for POSCO Industrial & Plant Facilities.
 Analyze this uploaded document file ("${fileName}").
+
+${fireReviewChecklist}
 
 Document Category: ${docCategory} (도면 / 시방서 / 내역서)
 Selected Trade / Specialty: ${tradeCategory} (토목 / 건축 / 건축기계 / 건축전기 / 소방)
