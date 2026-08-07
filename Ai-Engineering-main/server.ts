@@ -103,6 +103,13 @@ Review Guidelines by Document Category:
 
 The review must be based on the visual content of the supplied PDF/image, not OCR alone. Inspect geometry, symbols, dimensions, linework, equipment, annotations, spatial relationships, clashes, missing components, and code-relevant visual evidence. Return coordinates for findings when visible.
 
+REVIEW OPINION FORMAT (mandatory): Do not limit the response to design errors. Write a rich professional design-review opinion in Korean, even when no definite defect is proven. The response must contain these sections:
+1. 도면 기본 개요: project name, drawing title, drawing number, scale, page, discipline, and visible change scope. Do not invent values; label unreadable values as 확인 필요.
+2. 주요 설계 검토 항목 및 체크리스트: create numbered review items appropriate to the visible drawing. For each item include 검토 기준, 도면에서 확인한 내용, 상태(PASS/FAIL/NEEDS_CONFIRMATION), evidence, applicable law/standard, and recommendation. Include confirmed compliant items and improvement recommendations, not only failures.
+3. 현장 시공 및 추가 확인 필요사항: identify constructability, access/maintenance, coordination, obstruction, penetration, commissioning, tie-in, and field-verification risks visible or reasonably implied by the drawing. Clearly label assumptions.
+4. 종합 검토의견: summarize overall suitability, unresolved risks, required supplement documents, and priority actions.
+For fire protection drawings, explicitly write the following when the relevant information is visible: sprinkler discharge radius and head spacing against NFPC/NFTC 103; upright/pendent/sidewall or concealed-head selection and ceiling condition; branch/cross/main pipe diameter versus head-count sizing table; hydrant/extinguisher placement against NFPC 101; beam, lighting, grid, truss, duct and ceiling obstruction; existing-pipe valve/alarm-valve tie-in; pump, water-storage, smoke-control, emergency-power and cause-and-effect dependencies. If a numerical standard or table value cannot be verified from the supplied page, say so and request the calculation/detail rather than inventing compliance.
+
 Quality gate for this review:
 - Do not produce generic, reusable, or architecture-only example comments. Every finding must reference an observable feature in this exact uploaded page, or explicitly state that the feature could not be verified.
 - Review the complete page image systematically in five passes: title block/scope, dimensions and clearances, equipment and symbols, routing/layout clashes, and code/safety/constructability/VE implications.
@@ -129,6 +136,15 @@ Return ONLY valid JSON matching this exact structure:
     "status": "오류 의심" | "주의" | "정상" | "긴급 확인",
     "result": "One sentence expert summary of ${tradeCategory} ${docCategory} review findings",
     "description": "Detailed technical analysis citing relevant ${tradeCategory} code clauses and technical requirements"
+  },
+  "reviewNarrative": {
+    "drawingOverview": "도면 기본 개요 with project, title, scale, page and visible change scope",
+    "checklistReview": [
+      { "number": 1, "topic": "검토 항목", "criteria": "검토 기준", "observation": "도면에서 확인한 내용", "status": "PASS" | "FAIL" | "NEEDS_CONFIRMATION", "evidence": "증거", "legalBasis": "법률·기술기준", "recommendation": "권고사항" }
+    ],
+    "siteAndConstructionNotes": ["현장 시공 및 추가 확인 필요사항"],
+    "overallOpinion": "종합 검토의견",
+    "requiredDocuments": ["추가 확인이 필요한 계산서·상세도·연동표 등"]
   },
   "designErrors": [
     {

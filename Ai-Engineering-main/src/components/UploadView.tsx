@@ -198,6 +198,16 @@ export const UploadView: React.FC<UploadViewProps> = ({
               apiResult[key] = [...(apiResult[key] || []), ...(pageResult[key] || [])].map((item: any) => ({ ...item, pageNumber: item.pageNumber || pageIndex + 1 }));
             }
             apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
+            if (pageResult.reviewNarrative) {
+              apiResult.reviewNarrative = {
+                ...(apiResult.reviewNarrative || {}),
+                drawingOverview: apiResult.reviewNarrative?.drawingOverview || pageResult.reviewNarrative.drawingOverview,
+                checklistReview: [...(apiResult.reviewNarrative?.checklistReview || []), ...(pageResult.reviewNarrative.checklistReview || [])],
+                siteAndConstructionNotes: [...(apiResult.reviewNarrative?.siteAndConstructionNotes || []), ...(pageResult.reviewNarrative.siteAndConstructionNotes || [])],
+                overallOpinion: pageResult.reviewNarrative.overallOpinion || apiResult.reviewNarrative?.overallOpinion,
+                requiredDocuments: [...(apiResult.reviewNarrative?.requiredDocuments || []), ...(pageResult.reviewNarrative.requiredDocuments || [])],
+              };
+            }
             apiResult.calculationInputs = { ...(apiResult.calculationInputs || {}), ...(pageResult.calculationInputs || {}) };
             apiResult.engineeringCalculations = pageResult.engineeringCalculations || apiResult.engineeringCalculations;
           } else {
@@ -225,6 +235,15 @@ export const UploadView: React.FC<UploadViewProps> = ({
           apiResult?.drawingNumber ||
           `DWG-${selectedTradeCategory.substring(0, 2).toUpperCase()}-${Math.floor(10000 + Math.random() * 90000)}`;
         const scale = apiResult?.scale || '1 : 100';
+        const reviewNarrative = apiResult?.reviewNarrative;
+        const reviewNarrativeText = reviewNarrative
+          ? [
+              reviewNarrative.drawingOverview,
+              ...(reviewNarrative.checklistReview || []).map((item: any) => `${item.number}. ${item.topic} | 기준: ${item.criteria} | 확인: ${item.observation} | 상태: ${item.status} | 근거: ${item.legalBasis} | 권고: ${item.recommendation}`),
+              ...(reviewNarrative.siteAndConstructionNotes || []).map((note: string) => `현장·시공 확인: ${note}`),
+              `종합 검토의견: ${reviewNarrative.overallOpinion || ''}`,
+            ].filter(Boolean).join('\n\n')
+          : '';
         const rawOcrText =
           apiResult?.rawOcrText ||
           `[실제 파일 OCR 추출 - ${file.name}]\n도서구분: ${selectedDocCategory}\n공종: ${selectedTradeCategory}\n표제란: POSCO Plant Engineering & Construction\n도면번호: ${drawingNumber}\n축척: ${scale}\n${selectedTradeCategory} 전문 기술 기준 검토 완료.`;
@@ -269,6 +288,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           rawOcrText,
           ocrBlocks,
           markups,
+          reviewNarrative: apiResult?.reviewNarrative,
           engineeringCalculations: apiResult?.engineeringCalculations,
         };
 
@@ -286,7 +306,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           projectId: 'PH-2024-03',
           description:
-            apiResult?.reviewSummary?.description ||
+            reviewNarrativeText || apiResult?.reviewSummary?.description ||
             `[${selectedTradeCategory} ${selectedDocCategory} 정밀 검토] ${file.name} - 표제란(${drawingTitle}) 및 ${selectedTradeCategory} 관련 기술규정 검토 완료.`,
           cadUrl: fileDataUrl,
           fileDataUrl,
@@ -297,6 +317,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           rawOcrText,
           ocrBlocks,
           markups,
+          reviewNarrative: apiResult?.reviewNarrative,
           engineeringCalculations: apiResult?.engineeringCalculations,
           engineerNotes: `${file.name} (${selectedTradeCategory}) - 전문 기술사 보정의견 반영 필요.`,
         };

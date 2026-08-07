@@ -49,7 +49,16 @@ export interface FireCalculationResult {
   note: string;
 }
 
+export interface ReviewNarrative {
+  drawingOverview?: string;
+  checklistReview?: { number: number; topic: string; criteria: string; observation: string; status: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION'; evidence: string; legalBasis: string; recommendation: string }[];
+  siteAndConstructionNotes?: string[];
+  overallOpinion?: string;
+  requiredDocuments?: string[];
+}
+
 export interface ReviewItem {
+  reviewNarrative?: ReviewNarrative;
   engineeringCalculations?: FireCalculationResult[];
   previewPages?: string[];
   id: string;
@@ -140,6 +149,7 @@ export interface VeItem {
 }
 
 export interface UploadFile {
+  reviewNarrative?: ReviewNarrative;
   engineeringCalculations?: FireCalculationResult[];
   previewPages?: string[];
   id: string;
