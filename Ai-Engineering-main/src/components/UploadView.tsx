@@ -278,29 +278,28 @@ export const UploadView: React.FC<UploadViewProps> = ({
         ];
         const modelMarkups = Array.isArray(apiResult?.markups) ? apiResult.markups : [];
         const visualFindings = Array.isArray(apiResult?.visualFindings) ? apiResult.visualFindings : [];
-        const narrativeMarkups = (reviewNarrative.checklistReview || []).map((item: any, index: number) => ({
-          id: `review-${item.category || 'general'}-${index + 1}`,
-          xPercent: 50,
-          yPercent: 20 + ((index * 13) % 70),
-          title: `[${item.category || '설계'}] ${item.topic}`,
-          comment: item.observation || item.evidence,
-          evidence: item.evidence,
-          codeClause: item.legalBasis || item.criteria,
-          correctiveAction: item.recommendation,
-          findingStatus: item.status,
-          confidence: item.status === 'NEEDS_CONFIRMATION' ? 55 : 85,
-          category: item.category,
-          severity: item.status === 'FAIL' ? 'CRITICAL' : item.status === 'NEEDS_CONFIRMATION' ? 'WARNING' : 'INFO',
+        // 서술형 체크리스트는 우측 분석 카드에서 보여주고, 실제 좌표가 없는 항목은
+        // 도면 위 주석으로 만들지 않는다. 임의의 중앙 좌표를 사용하면 도면과 무관한
+        // 위치에 핀이 생기고 확대·축소 시 위치가 불안정해진다.
+        const clampPercent = (value: unknown, fallback: number) => {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : fallback;
+        };
+        const coordinateMarkups = modelMarkups.length > 0 ? modelMarkups : visualFindings.map((finding: any, index: number) => ({
+          id: finding.id || `vf-${index + 1}`,
+          xPercent: finding.xPercent,
+          yPercent: finding.yPercent,
+          title: finding.finding || `시각 검토 항목 ${index + 1}`,
+          comment: finding.evidence || '업로드 도면에서 확인된 시각 검토 항목입니다.',
+          codeClause: finding.codeClause,
+          severity: finding.severity || 'INFO',
         }));
-        const markups = [...(modelMarkups.length > 0 ? modelMarkups : visualFindings.map((finding: any, index: number) => ({
-              id: finding.id || `vf-${index + 1}`,
-              xPercent: Number(finding.xPercent) || 50,
-              yPercent: Number(finding.yPercent) || 50,
-              title: finding.finding || `시각 검토 항목 ${index + 1}`,
-              comment: finding.evidence || '업로드 도면에서 확인된 시각 검토 항목입니다.',
-              codeClause: finding.codeClause,
-              severity: finding.severity || 'INFO',
-            }))), ...narrativeMarkups];
+        const markups = coordinateMarkups.map((markup: any, index: number) => ({
+          ...markup,
+          id: markup.id || `markup-${index + 1}`,
+          xPercent: clampPercent(markup.xPercent, 50),
+          yPercent: clampPercent(markup.yPercent, 50),
+        }));
 
         const uniqueId = `${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`;
 
