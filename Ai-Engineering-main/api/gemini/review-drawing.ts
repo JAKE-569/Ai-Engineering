@@ -30,13 +30,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const models = ['gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+    const models = ['gemini-3-flash-preview'];
     let lastError: any = null;
     for (const model of models) {
       try {
         const response = await ai.models.generateContent({
           model,
-          contents: { parts: [
+          contents: { role: 'user', parts: [
             { inlineData: { mimeType, data: stripDataUrl(base64Data) } },
             { text: prompt },
           ] },
