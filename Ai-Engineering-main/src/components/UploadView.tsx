@@ -195,7 +195,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
             apiResult.scale ||= pageResult.scale;
             apiResult.rawOcrText = [apiResult.rawOcrText, pageResult.rawOcrText ? `[Page ${pageIndex + 1}]\n${pageResult.rawOcrText}` : ''].filter(Boolean).join('\n');
             for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designErrors', 'safetyItems', 'veItems']) {
-              apiResult[key] = [...(apiResult[key] || []), ...(pageResult[key] || [])].map((item: any) => ({ ...item, pageNumber: item.pageNumber || pageIndex + 1 }));
+              const pageItems = (pageResult[key] || []).map((item: any, itemIndex: number) => ({
+                ...item,
+                pageNumber: item.pageNumber || pageIndex + 1,
+                ...(key === 'markups' ? { id: `${item.id || `markup-${itemIndex + 1}`}-p${pageIndex + 1}-${itemIndex + 1}` } : {}),
+              }));
+              apiResult[key] = [...(apiResult[key] || []), ...pageItems];
             }
             apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
             if (pageResult.reviewNarrative) {
