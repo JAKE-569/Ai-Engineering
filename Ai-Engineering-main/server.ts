@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { calculateFireEngineering } from "./src/lib/fireCalculations";
+import { retrieveRules, runRuleScreening } from "./src/data/dummyRulesDb";
 
 async function startServer() {
   const app = express();
@@ -64,6 +65,11 @@ async function startServer() {
             (effectiveMime.startsWith("image/") || effectiveMime === "application/pdf") &&
             !effectiveMime.includes("svg");
 
+          // RAG retrieval: use trade, document type and filename before vision analysis.
+          // OCR text is added to this context after the model returns and is screened again.
+          const retrievedRules = retrieveRules({ trade: tradeCategory, docCategory, fileName });
+          const rulesContext = retrievedRules.map((rule) => ({ id: rule.id, code: rule.code, title: rule.title, severity: rule.severity })).slice(0, 12);
+
           const fireReviewChecklist = tradeCategory === "소방" ? `
 FIRE PROTECTION REVIEW CHECKLIST (mandatory):
 1. Submission completeness: project name/address/site-building-floor identifiers; construction type; permit/application date and applicable code date; revision consistency across all disciplines; required explanations, calculations, schematics, plans, details, equipment schedules, specifications and BOQ; designer qualification/seal; performance-based-design/approval status; and special hazards including hazardous materials, gas, generator, ESS, kitchen, PV and EV charging.
@@ -88,6 +94,9 @@ ${fireReviewChecklist}
 
 Document Category: ${docCategory} (도면 / 시방서 / 내역서)
 Selected Trade / Specialty: ${tradeCategory} (토목 / 건축 / 건축기계 / 건축전기 / 소방)
+
+RETRIEVED RULE CONTEXT (RAG): The following rules were retrieved from the engineering rules database. Use only matching rules as legal/technical evidence, and return the exact code in legalBasis/codeClause. If the drawing does not contain enough evidence, use NEEDS_CONFIRMATION.
+${JSON.stringify(rulesContext)}
 
 Your primary objective is to execute a rigorous, highly specific expert-level engineering review of this ${docCategory} based on official Korean engineering codes and standards:
 - **토목 (Civil)**: KDS 토질/기초, KCS 11 00 00 토공사, 건설기술 진흥법, 배수/사면/흙막이 수치검토
@@ -142,6 +151,9 @@ Return ONLY valid JSON matching this exact structure:
   ],
   "visualFindings": [
     { "id": "vf1", "finding": "Visual finding from the drawing", "evidence": "What is visibly present or missing", "xPercent": 50, "yPercent": 50, "confidence": 85 }
+  ],
+  "ruleScreening": [
+    { "ruleId": "fire-sprinkler-spacing", "code": "NFTC 103 / NFPC 103", "status": "FAIL" | "NEEDS_CONFIRMATION", "evidence": "Rule-based screening result", "recommendation": "Action" }
   ],
   "reviewSummary": {
     "status": "오류 의심" | "주의" | "정상" | "긴급 확인",
@@ -261,6 +273,24 @@ Return ONLY valid JSON matching this exact structure:
 
           if (response.text) {
             ocrResult = JSON.parse(response.text.trim());
+            const ruleText = [ocrResult.rawOcrText, ...(ocrResult.ocrBlocks || []).map((block: any) => block.text), fileName].filter(Boolean).join("\n");
+            ocrResult.ruleScreening = runRuleScreening(retrievedRules, ruleText);
+            const screenedFailures = ocrResult.ruleScreening.filter((item) => item.matched || item.status === "FAIL");
+            ocrResult.designErrors = (ocrResult.designErrors || []).map((item: any) => ({
+              ...item,
+              legalBasis: item.legalBasis || item.codeClause || screenedFailures.find((rule) => rule.severity === "CRITICAL")?.code || "확인 필요",
+              ruleScreening: screenedFailures,
+            }));
+            ocrResult.safetyItems = (ocrResult.safetyItems || []).map((item: any) => ({
+              ...item,
+              lawRegulation: item.lawRegulation || screenedFailures.find((rule) => rule.severity !== "INFO")?.code || "확인 필요",
+              ruleScreening: screenedFailures,
+            }));
+            ocrResult.veItems = (ocrResult.veItems || []).map((item: any) => ({
+              ...item,
+              legalBasis: item.legalBasis || item.codeClause || "계약·내역·시방서 대조 필요",
+              ruleScreening: screenedFailures,
+            }));
           }
         } catch (aiErr) {
           console.warn("Gemini Vision API notice (switching seamlessly to domain engineering engine):", (aiErr as Error)?.message || aiErr);

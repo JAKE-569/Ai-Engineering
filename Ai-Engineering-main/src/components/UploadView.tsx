@@ -194,7 +194,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             apiResult.drawingNumber ||= pageResult.drawingNumber;
             apiResult.scale ||= pageResult.scale;
             apiResult.rawOcrText = [apiResult.rawOcrText, pageResult.rawOcrText ? `[Page ${pageIndex + 1}]\n${pageResult.rawOcrText}` : ''].filter(Boolean).join('\n');
-            for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designErrors', 'safetyItems', 'veItems']) {
+            for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designErrors', 'safetyItems', 'veItems', 'ruleScreening']) {
               const pageItems = (pageResult[key] || []).map((item: any, itemIndex: number) => ({
                 ...item,
                 pageNumber: item.pageNumber || pageIndex + 1,
@@ -252,6 +252,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                   designErrors: apiResult.designErrors,
                   safetyItems: apiResult.safetyItems,
                   veItems: apiResult.veItems,
+                  ruleScreening: apiResult.ruleScreening,
                   markups: apiResult.markups,
                   rawOcrText: apiResult.rawOcrText,
                 },
