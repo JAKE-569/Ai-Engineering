@@ -103,6 +103,8 @@ Review Guidelines by Document Category:
 
 The review must be based on the visual content of the supplied PDF/image, not OCR alone. Inspect geometry, symbols, dimensions, linework, equipment, annotations, spatial relationships, clashes, missing components, and code-relevant visual evidence. Return coordinates for findings when visible.
 
+WEB-BASED REVIEW: When a legal, code, standard, product requirement, or current approval procedure is cited, use Google Search grounding to verify the current official source. Prefer official Korean government, National Fire Agency, law.go.kr, KFI, KATS, KEC/KDS/NFPC/NFTC publisher or project-owner sources. Return the source title, URL, publisher and access date in webSources. Do not use a web source to override visible drawing evidence; use it only to validate the applicable rule. If no authoritative source is found, mark the item NEEDS_CONFIRMATION.
+
 REVIEW OPINION FORMAT (mandatory): Do not limit the response to design errors. Write a rich professional design-review opinion in Korean, even when no definite defect is proven. The response must contain these sections:
 1. 도면 기본 개요: project name, drawing title, drawing number, scale, page, discipline, and visible change scope. Do not invent values; label unreadable values as 확인 필요.
 2. 주요 설계 검토 항목 및 체크리스트: create numbered review items appropriate to the visible drawing. For each item include 검토 기준, 도면에서 확인한 내용, 상태(PASS/FAIL/NEEDS_CONFIRMATION), evidence, applicable law/standard, and recommendation. Include confirmed compliant items and improvement recommendations, not only failures.
@@ -156,6 +158,9 @@ Return ONLY valid JSON matching this exact structure:
     "overallOpinion": "종합 검토의견",
     "requiredDocuments": ["추가 확인이 필요한 계산서·상세도·연동표 등"]
   },
+  "webSources": [
+    { "title": "Official source title", "url": "https://...", "publisher": "Source publisher", "accessedAt": "ISO timestamp", "supports": "Which review item this source supports" }
+  ],
   "designErrors": [
     {
       "id": "err-1",
@@ -246,6 +251,7 @@ Return ONLY valid JSON matching this exact structure:
             },
             config: {
               responseMimeType: "application/json",
+              ...(tradeCategory === "소방" || docCategory === "도면" ? { tools: [{ googleSearch: {} }] } : {}),
             },
           });
 
