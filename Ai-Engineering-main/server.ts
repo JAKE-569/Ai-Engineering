@@ -769,6 +769,59 @@ Return ONLY valid JSON matching this exact structure:
     });
   }
 
+  // API Endpoint: Synthesize a file-level review from page-level visual findings.
+  // This second pass reconciles cross-page evidence without inventing drawing coordinates.
+  app.post("/api/gemini/synthesize-review", async (req, res) => {
+    try {
+      const { fileName, docCategory = "도면", tradeCategory = "소방", pageResults } = req.body;
+      const ai = getGeminiClient();
+      if (!ai || !fileName || !pageResults || typeof pageResults !== "object") {
+        return res.status(400).json({ error: "fileName, pageResults and GEMINI_API_KEY are required" });
+      }
+
+      const synthesisPrompt = `
+당신은 ${tradeCategory} 분야의 수석 설계검토 책임자입니다. 아래는 업로드된 ${fileName} (${docCategory})를 페이지별로 시각 검토한 결과입니다.
+페이지 결과에 존재하는 증거만 사용하여 파일 전체의 종합 검토를 작성하십시오. 페이지 간 불일치는 명시하고, 확인할 수 없는 내용은 NEEDS_CONFIRMATION으로 표시하십시오. 일반적인 건축 예시나 도면과 무관한 문장을 생성하지 마십시오.
+
+검토 순서:
+1) 도면 세트 기본정보와 페이지별 범위 정리
+2) 설계 정합성·법규/안전·시공성·타분야 역무범위·원가/VE 분류
+3) 동일 이슈 중복 제거 및 심각도 우선순위화
+4) 확인된 증거와 확인이 필요한 자료 분리
+5) 종합 판단 및 우선 조치 작성
+
+반드시 다음 JSON만 반환하십시오:
+{
+  "reviewSummary": {"status":"오류 의심|주의|정상|긴급 확인", "result":"한 문장 요약", "description":"근거 중심 종합 판단"},
+  "reviewNarrative": {
+    "drawingOverview":"도면 세트 개요",
+    "checklistReview":[{"number":1,"category":"설계|안전|시공 전|시공 후|타분야 연계|원가·VE","topic":"항목","criteria":"기준","observation":"도면에서 확인한 내용","status":"PASS|FAIL|NEEDS_CONFIRMATION","evidence":"페이지와 증거","legalBasis":"법규·기술기준","responsibleParty":"확인 주체","scopeOwner":"공급·시공·시험 책임","recommendation":"조치"}],
+    "preConstructionChecks":["구체적 시공 전 확인"],
+    "postConstructionChecks":["구체적 시공 후 확인"],
+    "interfaceAndScopeChecks":["구체적 타분야·역무범위 확인"],
+    "siteAndConstructionNotes":["현장 확인사항"],
+    "overallOpinion":"우선순위가 포함된 종합 의견",
+    "requiredDocuments":["필요한 추가 자료"]
+  },
+  "designErrors": [], "safetyItems": [], "veItems": []
+}
+
+페이지별 원자료:
+${JSON.stringify(pageResults).slice(0, 180000)}
+`;
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: [{ text: synthesisPrompt }],
+        config: { responseMimeType: "application/json", temperature: 0.15, maxOutputTokens: 20000, tools: [{ googleSearch: {} }] },
+      });
+      if (!response.text) return res.status(502).json({ error: "Gemini synthesis returned no content" });
+      return res.json({ success: true, data: JSON.parse(response.text.trim()), model: "gemini-3.6-flash" });
+    } catch (error) {
+      console.error("Gemini synthesis error:", error);
+      return res.status(502).json({ error: "Gemini file-level synthesis failed" });
+    }
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`POSCO AI Engineering Server running on http://0.0.0.0:${PORT}`);
   });

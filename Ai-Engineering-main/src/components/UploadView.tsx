@@ -233,6 +233,43 @@ export const UploadView: React.FC<UploadViewProps> = ({
         }
         }
 
+        if (apiResult && reviewPages.length > 1) {
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} 전체 도면 종합 분석 중...`);
+          try {
+            const synthesisResponse = await fetch('/api/gemini/synthesize-review', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileName: file.name,
+                docCategory: selectedDocCategory,
+                tradeCategory: selectedTradeCategory,
+                pageResults: {
+                  drawingTitle: apiResult.drawingTitle,
+                  drawingNumber: apiResult.drawingNumber,
+                  scale: apiResult.scale,
+                  reviewSummary: apiResult.reviewSummary,
+                  reviewNarrative: apiResult.reviewNarrative,
+                  designErrors: apiResult.designErrors,
+                  safetyItems: apiResult.safetyItems,
+                  veItems: apiResult.veItems,
+                  markups: apiResult.markups,
+                  rawOcrText: apiResult.rawOcrText,
+                },
+              }),
+            });
+            const synthesisData = await synthesisResponse.json();
+            if (synthesisData.success && synthesisData.data) {
+              apiResult.reviewSummary = synthesisData.data.reviewSummary || apiResult.reviewSummary;
+              apiResult.reviewNarrative = synthesisData.data.reviewNarrative || apiResult.reviewNarrative;
+              apiResult.designErrors = synthesisData.data.designErrors?.length ? synthesisData.data.designErrors : apiResult.designErrors;
+              apiResult.safetyItems = synthesisData.data.safetyItems?.length ? synthesisData.data.safetyItems : apiResult.safetyItems;
+              apiResult.veItems = synthesisData.data.veItems?.length ? synthesisData.data.veItems : apiResult.veItems;
+            }
+          } catch (synthesisError) {
+            console.warn('File-level synthesis unavailable; preserving page-level review.', synthesisError);
+          }
+        }
+
         // Keep the uploaded source available even when the external vision service
         // is unavailable. The review fields below fall back to document metadata.
 
