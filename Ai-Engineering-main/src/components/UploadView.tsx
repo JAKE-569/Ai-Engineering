@@ -203,6 +203,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
                 ...(apiResult.reviewNarrative || {}),
                 drawingOverview: apiResult.reviewNarrative?.drawingOverview || pageResult.reviewNarrative.drawingOverview,
                 checklistReview: [...(apiResult.reviewNarrative?.checklistReview || []), ...(pageResult.reviewNarrative.checklistReview || [])],
+                preConstructionChecks: [...(apiResult.reviewNarrative?.preConstructionChecks || []), ...(pageResult.reviewNarrative.preConstructionChecks || [])],
+                postConstructionChecks: [...(apiResult.reviewNarrative?.postConstructionChecks || []), ...(pageResult.reviewNarrative.postConstructionChecks || [])],
+                interfaceAndScopeChecks: [...(apiResult.reviewNarrative?.interfaceAndScopeChecks || []), ...(pageResult.reviewNarrative.interfaceAndScopeChecks || [])],
                 siteAndConstructionNotes: [...(apiResult.reviewNarrative?.siteAndConstructionNotes || []), ...(pageResult.reviewNarrative.siteAndConstructionNotes || [])],
                 overallOpinion: pageResult.reviewNarrative.overallOpinion || apiResult.reviewNarrative?.overallOpinion,
                 requiredDocuments: [...(apiResult.reviewNarrative?.requiredDocuments || []), ...(pageResult.reviewNarrative.requiredDocuments || [])],
@@ -240,6 +243,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
           ? [
               reviewNarrative.drawingOverview,
               ...(reviewNarrative.checklistReview || []).map((item: any) => `${item.number}. ${item.topic} | 기준: ${item.criteria} | 확인: ${item.observation} | 상태: ${item.status} | 근거: ${item.legalBasis} | 권고: ${item.recommendation}`),
+              ...(reviewNarrative.preConstructionChecks || []).map((item: string) => `시공 전 확인: ${item}`),
+              ...(reviewNarrative.postConstructionChecks || []).map((item: string) => `시공 후 확인: ${item}`),
+              ...(reviewNarrative.interfaceAndScopeChecks || []).map((item: string) => `타분야·역무범위 확인: ${item}`),
               ...(reviewNarrative.siteAndConstructionNotes || []).map((note: string) => `현장·시공 확인: ${note}`),
               `종합 검토의견: ${reviewNarrative.overallOpinion || ''}`,
             ].filter(Boolean).join('\n\n')
