@@ -409,6 +409,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {selectedItem.description}
                 </p>
               </section>
+              {selectedItem.reviewNarrative && (
+                <section>
+                  <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">전문 설계 검토의견</h6>
+                  <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm leading-6 text-[#191c1e]">
+                    {selectedItem.reviewNarrative.drawingOverview && <p className="font-semibold">{selectedItem.reviewNarrative.drawingOverview}</p>}
+                    {selectedItem.reviewNarrative.checklistReview?.map((item) => <div key={`${item.number}-${item.topic}`} className="rounded border border-slate-200 bg-white p-3"><b>{item.number}. {item.topic}</b><p className="mt-1">{item.observation}</p><p className="mt-1 text-xs text-slate-600">기준: {item.criteria} · 상태: {item.status} · 근거: {item.legalBasis}</p><p className="mt-1 text-xs font-semibold text-blue-800">권고: {item.recommendation}</p></div>)}
+                    {selectedItem.reviewNarrative.preConstructionChecks?.map((item, index) => <p key={`pre-${index}`}><b>시공 전 확인 {index + 1}.</b> {item}</p>)}
+                    {selectedItem.reviewNarrative.postConstructionChecks?.map((item, index) => <p key={`post-${index}`}><b>시공 후 확인 {index + 1}.</b> {item}</p>)}
+                    {selectedItem.reviewNarrative.interfaceAndScopeChecks?.map((item, index) => <p key={`scope-${index}`}><b>타분야·역무범위 {index + 1}.</b> {item}</p>)}
+                    {selectedItem.reviewNarrative.overallOpinion && <p className="border-t border-blue-200 pt-3 font-bold">종합 검토의견: {selectedItem.reviewNarrative.overallOpinion}</p>}
+                  </div>
+                </section>
+              )}
 
               <section>
                 <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
