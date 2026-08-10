@@ -68,7 +68,7 @@ async function startServer() {
           // RAG retrieval: use trade, document type and filename before vision analysis.
           // OCR text is added to this context after the model returns and is screened again.
           const retrievedRules = retrieveRules({ trade: tradeCategory, docCategory, fileName });
-          const rulesContext = retrievedRules.map((rule) => ({ id: rule.id, code: rule.code, title: rule.title, severity: rule.severity })).slice(0, 12);
+          const rulesContext = retrievedRules.map((rule) => ({ id: rule.id, code: rule.code, title: rule.title, severity: rule.severity, source: rule.source })).slice(0, 12);
 
           const fireReviewChecklist = tradeCategory === "소방" ? `
 FIRE PROTECTION REVIEW CHECKLIST (mandatory):
