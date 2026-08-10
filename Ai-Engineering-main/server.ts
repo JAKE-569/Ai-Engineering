@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { calculateFireEngineering } from "./src/lib/fireCalculations";
 import { retrieveRules, runRuleScreening } from "./src/data/dummyRulesDb";
+import fullFireRulesDb from "./src/data/fireRulesFullDb.json";
 
 async function startServer() {
   const app = express();
@@ -68,7 +69,12 @@ async function startServer() {
           // RAG retrieval: use trade, document type and filename before vision analysis.
           // OCR text is added to this context after the model returns and is screened again.
           const retrievedRules = retrieveRules({ trade: tradeCategory, docCategory, fileName });
-          const rulesContext = retrievedRules.map((rule) => ({ id: rule.id, code: rule.code, title: rule.title, severity: rule.severity, source: rule.source })).slice(0, 12);
+          const initialCode = /가스|누설/i.test(`${fileName} ${docCategory}`) ? 'NFPC 206' : /스프링클러|소화/i.test(`${fileName} ${docCategory}`) ? 'NFPC 103' : undefined;
+          const retrievedClauses = fullFireRulesDb.clauses.filter((clause: any) => clause.code === initialCode).slice(0, 12);
+          const rulesContext = [
+            ...retrievedRules.map((rule) => ({ id: rule.id, code: rule.code, title: rule.title, severity: rule.severity, source: rule.source })),
+            ...retrievedClauses.map((clause: any) => ({ id: `${clause.code}-${clause.clause}`, code: clause.code, title: clause.clause, text: clause.text, source: { title: clause.code, url: clause.sourceUrl, publisher: clause.publisher } })),
+          ].slice(0, 20);
 
           const fireReviewChecklist = tradeCategory === "소방" ? `
 FIRE PROTECTION REVIEW CHECKLIST (mandatory):
@@ -275,6 +281,9 @@ Return ONLY valid JSON matching this exact structure:
             ocrResult = JSON.parse(response.text.trim());
             const ruleText = [ocrResult.rawOcrText, ...(ocrResult.ocrBlocks || []).map((block: any) => block.text), fileName].filter(Boolean).join("\n");
             ocrResult.ruleScreening = runRuleScreening(retrievedRules, ruleText);
+            const clauseKeywords = ['가스', '스프링클러', '소화기', '감지기', '피난', '제연', '수신기', '방화'];
+            const matchedClauses = fullFireRulesDb.clauses.filter((clause: any) => clauseKeywords.some((keyword) => ruleText.includes(keyword) && clause.text.includes(keyword))).slice(0, 30);
+            ocrResult.ruleScreening.push(...matchedClauses.map((clause: any) => ({ ruleId: `${clause.code}-${clause.clause}`, code: clause.code, title: clause.clause, severity: 'INFO', matched: true, status: 'NEEDS_CONFIRMATION', evidence: clause.text, recommendation: '도면의 해당 항목과 조문 적용 여부를 담당 기술자가 확인하십시오.', source: { title: clause.code, url: clause.sourceUrl, publisher: clause.publisher } })));
             const screenedFailures = ocrResult.ruleScreening.filter((item) => item.matched || item.status === "FAIL");
             ocrResult.designErrors = (ocrResult.designErrors || []).map((item: any) => ({
               ...item,
