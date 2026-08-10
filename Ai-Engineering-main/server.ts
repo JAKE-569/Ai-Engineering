@@ -276,6 +276,7 @@ Return ONLY valid JSON matching this exact structure:
           const response = await ai.models.generateContent({
             model: getGeminiModel(),
             contents: {
+              role: "user",
               parts: partsArr,
             },
             config: {
