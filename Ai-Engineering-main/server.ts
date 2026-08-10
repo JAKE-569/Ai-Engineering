@@ -25,7 +25,9 @@ async function startServer() {
     return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
   };
 
-  const getGeminiModel = () => process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT ? (process.env.VERTEX_AI_MODEL || 'gemini-2.5-flash') : 'gemini-2.0-flash';
+  // Google API model ID for the requested "Gemini 3.0 Flash" line.
+  // Google exposes this preview model as gemini-3-flash-preview.
+  const getGeminiModel = () => process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT ? (process.env.VERTEX_AI_MODEL || 'gemini-3-flash-preview') : 'gemini-2.0-flash';
 
   // API Endpoint: Health & Backend Status Check
   app.get("/api/backend-status", (req, res) => {
