@@ -115,6 +115,8 @@ For fire protection drawings, explicitly write the following when the relevant i
 
 MINIMUM OPINION COUNT (mandatory): Generate at least 5 non-duplicate review opinions for EACH applicable review area, not 5 opinions total. For fire-protection drawings, provide at least 5 items in each of these areas: (A) document completeness and legal applicability, (B) architectural/drawing coordination, (C) water-based suppression and hydraulic design, (D) alarm/evacuation/smoke-control/firefighting facilities, (E) electrical-mechanical interlock, (F) constructability/maintenance, (G) pre-construction checks, (H) post-construction/commissioning checks, and (I) multidisciplinary/vendor scope interfaces. Each item must have a different topic, criterion, observation, status, evidence, legal basis, responsible party, scope/interface owner, and recommendation. If the supplied drawing cannot verify five items in an area, generate five distinct NEEDS_CONFIRMATION requests identifying the exact missing drawing, calculation, schedule, contract scope, method statement, test record, or site information. Never pad the count with generic statements or repeated wording.
 
+CATEGORY MINIMUMS (mandatory for every uploaded drawing review): return at least 5 design-engineering review items in designErrors or the structured review narrative, at least 1 independent safety/legal review item in safetyItems, and at least 3 independent cost-reduction/VE items in veItems. The 5 design items must cover different engineering subjects; the safety item must cite a law, code, or clearly state why the legal basis requires confirmation; and each of the 3 VE items must include a distinct opportunity, location/scope, implementation condition, risk/trade-off, and calculation basis. If evidence is insufficient, use NEEDS_CONFIRMATION with the exact missing source instead of inventing values or repeating the same finding.
+
 Quality gate for this review:
 - Do not produce generic, reusable, or architecture-only example comments. Every finding must reference an observable feature in this exact uploaded page, or explicitly state that the feature could not be verified.
 - Review the complete page image systematically in five passes: title block/scope, dimensions and clearances, equipment and symbols, routing/layout clashes, and code/safety/constructability/VE implications.
@@ -727,7 +729,15 @@ Return ONLY valid JSON matching this exact structure:
 
       const calculationInputs = ocrResult?.calculationInputs || {};
       const engineeringCalculations = tradeCategory === "소방" ? calculateFireEngineering(calculationInputs) : [];
-      return res.json({ success: true, data: { ...ocrResult, engineeringCalculations } });
+      const reviewCounts = {
+        design: Array.isArray(ocrResult?.designErrors) ? ocrResult.designErrors.length : 0,
+        safety: Array.isArray(ocrResult?.safetyItems) ? ocrResult.safetyItems.length : 0,
+        ve: Array.isArray(ocrResult?.veItems) ? ocrResult.veItems.length : 0,
+        designMinimumMet: (ocrResult?.designErrors?.length || 0) >= 5,
+        safetyMinimumMet: (ocrResult?.safetyItems?.length || 0) >= 1,
+        veMinimumMet: (ocrResult?.veItems?.length || 0) >= 3,
+      };
+      return res.json({ success: true, data: { ...ocrResult, engineeringCalculations, reviewCounts } });
     } catch (err: any) {
       console.error("Review drawing endpoint error:", err);
       return res.status(500).json({ error: err.message || "Failed to analyze drawing" });
