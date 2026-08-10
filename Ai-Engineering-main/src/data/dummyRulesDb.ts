@@ -25,6 +25,11 @@ const numberAfter = (text: string, pattern: RegExp) => {
 
 export const dummyRulesDb: EngineeringRule[] = [
   {
+    id: 'fire-gas-leak-detector', trade: ['소방', '건축기계', '건축전기'], keywords: ['가스누설경보기', '가스누설', '가스', '누설경보기', '가스화재'], code: 'NFPC 206 / NFTC 206', title: '가스누설경보기 설치·전원·경보 연동', severity: 'CRITICAL',
+    source: { title: '가스누설경보기의 화재안전성능기준(NFPC 206)', url: 'https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2100000216098&lsId=76070&chrClsCd=010202', publisher: '국가법령정보센터·소방청', accessedAt: '2026-08-10', effectiveDate: '2022-11-25' },
+    checkCondition: (text) => ({ matched: /가스누설경보기|가스누설|가스화재/i.test(text), status: 'NEEDS_CONFIRMATION', evidence: '가스 또는 가스누설경보기 관련 정보가 확인되었습니다.', recommendation: '검지기 설치 위치·경계구역·경보농도·수신반 연동·비상전원·차단밸브 연동을 NFPC 206 및 NFTC 206 원문과 대조하십시오.' }),
+  },
+  {
     id: 'fire-sprinkler-spacing', trade: ['소방'], keywords: ['스프링클러', '헤드', '살수', '방사'], code: 'NFTC 103 / NFPC 103', title: '스프링클러 헤드 수평거리 및 살수장애', severity: 'CRITICAL',
     source: { title: '스프링클러설비의 화재안전성능기준(NFPC 103)', url: 'https://www.law.go.kr/LSW/admRulLsInfoP.do?admRulId=35312&efYd=0', publisher: '국가법령정보센터·소방청', accessedAt: '2026-08-10', effectiveDate: '2026-03-01' },
     checkCondition: (text) => { const distance = numberAfter(text, /(?:거리|간격|R\s*=)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*m/i); return distance !== undefined && distance > 2.3 ? { matched: true, status: 'FAIL', evidence: `도면/문서에서 ${distance}m 값이 확인되어 기준 2.3m 이하를 초과할 가능성이 있습니다.`, recommendation: '헤드 간격·보호면적·장애물 조건을 재산정하고 평면도와 수리계산서를 보완하십시오.' } : { matched: false, status: 'NEEDS_CONFIRMATION', evidence: '헤드 간격 또는 살수반경 수치가 명확히 추출되지 않았습니다.', recommendation: '헤드 배치도와 수리계산서에서 최대 수평거리를 확인하십시오.' }; },
