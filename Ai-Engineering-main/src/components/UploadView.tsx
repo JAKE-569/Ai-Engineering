@@ -238,7 +238,18 @@ export const UploadView: React.FC<UploadViewProps> = ({
           apiResult?.drawingNumber ||
           `DWG-${selectedTradeCategory.substring(0, 2).toUpperCase()}-${Math.floor(10000 + Math.random() * 90000)}`;
         const scale = apiResult?.scale || '1 : 100';
-        const reviewNarrative = apiResult?.reviewNarrative;
+        const reviewNarrative = apiResult?.reviewNarrative || {
+          drawingOverview: `${drawingTitle} · ${selectedTradeCategory} ${selectedDocCategory} 검토`,
+          checklistReview: [
+            ...(apiResult?.designErrors || []).map((item: any, index: number) => ({ number: index + 1, category: '설계', topic: item.description, criteria: item.codeClause || '공종별 설계기준 확인 필요', observation: item.description, status: item.findingStatus || 'FAIL', evidence: item.evidence || item.description, legalBasis: item.legalBasis || item.codeClause || '관련 기준 확인 필요', recommendation: item.suggestedFix || '설계도서 및 상세 계산서 보완 필요' })),
+            ...(apiResult?.safetyItems || []).map((item: any, index: number) => ({ number: index + 1, category: '안전', topic: item.summary, criteria: item.lawRegulation || '안전 기준 확인 필요', observation: item.details || item.summary, status: item.findingStatus || 'NEEDS_CONFIRMATION', evidence: item.evidence || item.details || item.summary, legalBasis: item.lawRegulation || '관련 법규 확인 필요', recommendation: item.requiredConfirmation || '현장 및 관련 서류 확인 필요' })),
+            ...(apiResult?.veItems || []).map((item: any, index: number) => ({ number: index + 1, category: '원가·VE', topic: item.description, criteria: item.calculationBasis || '원가·수량 근거 확인 필요', observation: item.subDescription, status: item.findingStatus || 'NEEDS_CONFIRMATION', evidence: item.evidence || item.location, legalBasis: '계약·내역·시방서 대조 필요', recommendation: item.calculationBasis || '수량·단가·적용 조건 확인 후 VE 검토' })),
+          ],
+          preConstructionChecks: ['최신 Revision 및 현장 기존설비 상태 확인', '시공 전 타분야 간섭 및 공급범위 확인'],
+          postConstructionChecks: ['압력·누수·성능시험 및 연동시험 확인', 'As-built 및 준공서류 반영 확인'],
+          interfaceAndScopeChecks: ['건축·기계·전기·제어·전문업체 간 공급·시공·시험 책임분계 확인'],
+          overallOpinion: apiResult?.reviewSummary?.description || '설계도서·계산서·현장조건의 추가 대조가 필요합니다.',
+        };
         const reviewNarrativeText = reviewNarrative
           ? [
               reviewNarrative.drawingOverview,
@@ -262,9 +273,21 @@ export const UploadView: React.FC<UploadViewProps> = ({
         ];
         const modelMarkups = Array.isArray(apiResult?.markups) ? apiResult.markups : [];
         const visualFindings = Array.isArray(apiResult?.visualFindings) ? apiResult.visualFindings : [];
-        const markups = modelMarkups.length > 0
-          ? modelMarkups
-          : visualFindings.map((finding: any, index: number) => ({
+        const narrativeMarkups = (reviewNarrative.checklistReview || []).map((item: any, index: number) => ({
+          id: `review-${item.category || 'general'}-${index + 1}`,
+          xPercent: 50,
+          yPercent: 20 + ((index * 13) % 70),
+          title: `[${item.category || '설계'}] ${item.topic}`,
+          comment: item.observation || item.evidence,
+          evidence: item.evidence,
+          codeClause: item.legalBasis || item.criteria,
+          correctiveAction: item.recommendation,
+          findingStatus: item.status,
+          confidence: item.status === 'NEEDS_CONFIRMATION' ? 55 : 85,
+          category: item.category,
+          severity: item.status === 'FAIL' ? 'CRITICAL' : item.status === 'NEEDS_CONFIRMATION' ? 'WARNING' : 'INFO',
+        }));
+        const markups = [...(modelMarkups.length > 0 ? modelMarkups : visualFindings.map((finding: any, index: number) => ({
               id: finding.id || `vf-${index + 1}`,
               xPercent: Number(finding.xPercent) || 50,
               yPercent: Number(finding.yPercent) || 50,
@@ -272,7 +295,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               comment: finding.evidence || '업로드 도면에서 확인된 시각 검토 항목입니다.',
               codeClause: finding.codeClause,
               severity: finding.severity || 'INFO',
-            }));
+            }))), ...narrativeMarkups];
 
         const uniqueId = `${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -294,7 +317,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           rawOcrText,
           ocrBlocks,
           markups,
-          reviewNarrative: apiResult?.reviewNarrative,
+          reviewNarrative,
           engineeringCalculations: apiResult?.engineeringCalculations,
         };
 
@@ -323,7 +346,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           rawOcrText,
           ocrBlocks,
           markups,
-          reviewNarrative: apiResult?.reviewNarrative,
+          reviewNarrative,
           engineeringCalculations: apiResult?.engineeringCalculations,
           engineerNotes: `${file.name} (${selectedTradeCategory}) - 전문 기술사 보정의견 반영 필요.`,
         };
