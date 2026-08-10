@@ -16,16 +16,16 @@ async function startServer() {
 
   // Helper: Initialize Gemini API client securely on the server
   const getGeminiClient = () => {
+    const vertexProject = process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const vertexApiKey = process.env.VERTEX_AI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (vertexProject) {
+      return new GoogleGenAI({ vertexai: true, project: vertexProject, location: process.env.VERTEX_AI_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'global', apiKey: vertexApiKey });
+    }
     if (!process.env.GEMINI_API_KEY) return null;
-    return new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
+    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
   };
+
+  const getGeminiModel = () => process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT ? (process.env.VERTEX_AI_MODEL || 'gemini-2.5-flash') : 'gemini-2.0-flash';
 
   // API Endpoint: Health & Backend Status Check
   app.get("/api/backend-status", (req, res) => {
@@ -34,7 +34,7 @@ async function startServer() {
       connected: true,
       backendDatabase: "Supabase PostgreSQL (Pre-Integrated on Backend)",
       deploymentServer: "Cloud Run / Vercel Serverless Ready",
-      aiEngine: "Gemini 2.0 Flash Vision OCR Active",
+      aiEngine: `${process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT ? 'Vertex AI' : 'Gemini API'} ${getGeminiModel()} Vision Active`,
       timestamp: new Date().toISOString(),
     });
   });
@@ -266,7 +266,7 @@ Return ONLY valid JSON matching this exact structure:
           }
 
           const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: getGeminiModel(),
             contents: {
               parts: partsArr,
             },
@@ -850,12 +850,12 @@ Return ONLY valid JSON matching this exact structure:
 ${JSON.stringify(pageResults).slice(0, 180000)}
 `;
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: getGeminiModel(),
         contents: [{ text: synthesisPrompt }],
         config: { responseMimeType: "application/json", temperature: 0.15, maxOutputTokens: 20000, tools: [{ googleSearch: {} }] },
       });
       if (!response.text) return res.status(502).json({ error: "Gemini synthesis returned no content" });
-      return res.json({ success: true, data: JSON.parse(response.text.trim()), model: "gemini-2.0-flash" });
+      return res.json({ success: true, data: JSON.parse(response.text.trim()), model: getGeminiModel() });
     } catch (error) {
       console.error("Gemini synthesis error:", error);
       return res.status(502).json({ error: "Gemini file-level synthesis failed" });
