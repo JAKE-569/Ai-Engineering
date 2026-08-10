@@ -17,9 +17,15 @@ async function startServer() {
   // Helper: Initialize Gemini API client securely on the server
   const getGeminiClient = () => {
     const vertexProject = process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
-    const vertexApiKey = process.env.VERTEX_AI_API_KEY || process.env.GOOGLE_API_KEY;
     if (vertexProject) {
-      return new GoogleGenAI({ vertexai: true, project: vertexProject, location: process.env.VERTEX_AI_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'global', apiKey: vertexApiKey });
+      // Gemini Enterprise Agent Platform (formerly Vertex AI) uses ADC in
+      // production. The SDK discovers credentials from gcloud ADC, an
+      // attached service account, or GOOGLE_APPLICATION_CREDENTIALS.
+      return new GoogleGenAI({
+        vertexai: true,
+        project: vertexProject,
+        location: process.env.VERTEX_AI_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'global'
+      });
     }
     if (!process.env.GEMINI_API_KEY) return null;
     return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
@@ -36,7 +42,7 @@ async function startServer() {
       connected: true,
       backendDatabase: "Supabase PostgreSQL (Pre-Integrated on Backend)",
       deploymentServer: "Cloud Run / Vercel Serverless Ready",
-      aiEngine: `${process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT ? 'Vertex AI' : 'Gemini API'} ${getGeminiModel()} Vision Active`,
+      aiEngine: `${process.env.VERTEX_AI_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT ? 'Gemini Enterprise Agent Platform (ADC)' : 'Gemini API'} ${getGeminiModel()} Vision Active`,
       timestamp: new Date().toISOString(),
     });
   });
