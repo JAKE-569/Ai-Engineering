@@ -96,6 +96,12 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.25, 2.5));
   const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.25, 0.5));
   const handleResetZoom = () => setZoomLevel(1);
+  const handleCtrlWheelZoom = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    setZoomLevel((prev) => Math.min(2.5, Math.max(0.5, Number((prev + direction * 0.1).toFixed(2)))));
+  };
   const handleResetView = () => {
     setZoomLevel(1);
     setPan({ x: 0, y: 0 });
@@ -134,7 +140,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
           <span className="font-semibold">PDF 원본 · {fileName}</span>
           <div className="flex items-center gap-2"><button type="button" onClick={handleZoomOut} className="rounded border px-2 py-1 font-bold">−</button><span className="min-w-[42px] text-center">{Math.round(zoomLevel * 100)}%</span><button type="button" onClick={handleZoomIn} className="rounded border px-2 py-1 font-bold">+</button><button type="button" onClick={handleResetView} className="rounded border px-2 py-1 text-[10px]">초기화</button><span className="ml-2">{currentPage + 1} / {previewPages.length}</span><button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} className="rounded border px-2 py-1 disabled:opacity-40">이전</button><button type="button" disabled={currentPage === previewPages.length - 1} onClick={() => setCurrentPage((p) => Math.min(previewPages.length - 1, p + 1))} className="rounded border px-2 py-1 disabled:opacity-40">다음</button></div>
         </div>
-        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-200 p-4">
+        <div onWheel={handleCtrlWheelZoom} className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-200 p-4">
           <div className="relative inline-block max-h-full max-w-full shadow-xl" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}>
             <img src={previewPages[currentPage]} alt={`${fileName} PDF ${currentPage + 1}페이지`} className="block max-h-[520px] max-w-full object-contain" />
             {showMarkupLayer && effectiveMarkups.filter((mk) => !mk.pageNumber || mk.pageNumber === currentPage + 1).map((mk, index) => <button type="button" key={mk.id || index} onClick={() => setActiveMarkupId(mk.id)} className={`absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white text-[10px] font-bold text-white shadow-lg ${markupTone(mk)}`} style={{ left: `calc(${mk.xPercent}% + ${((index % 3) - 1) * 26}px)`, top: `calc(${mk.yPercent}% + ${(Math.floor(index / 3) % 3) * 24}px)` }}>{index + 1}</button>)}
@@ -295,6 +301,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onWheel={handleCtrlWheelZoom}
       >
         {/* Render PDF Document if uploaded format is PDF */}
         {isPdfData ? (
