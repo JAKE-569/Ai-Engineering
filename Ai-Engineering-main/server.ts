@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -33,7 +34,7 @@ async function startServer() {
       connected: true,
       backendDatabase: "Supabase PostgreSQL (Pre-Integrated on Backend)",
       deploymentServer: "Cloud Run / Vercel Serverless Ready",
-      aiEngine: "Gemini 3.6 Flash Vision OCR Active",
+      aiEngine: "Gemini 2.0 Flash Vision OCR Active",
       timestamp: new Date().toISOString(),
     });
   });
@@ -265,7 +266,7 @@ Return ONLY valid JSON matching this exact structure:
           }
 
           const response = await ai.models.generateContent({
-            model: "gemini-3.6-flash",
+            model: "gemini-2.0-flash",
             contents: {
               parts: partsArr,
             },
@@ -849,12 +850,12 @@ Return ONLY valid JSON matching this exact structure:
 ${JSON.stringify(pageResults).slice(0, 180000)}
 `;
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-2.0-flash",
         contents: [{ text: synthesisPrompt }],
         config: { responseMimeType: "application/json", temperature: 0.15, maxOutputTokens: 20000, tools: [{ googleSearch: {} }] },
       });
       if (!response.text) return res.status(502).json({ error: "Gemini synthesis returned no content" });
-      return res.json({ success: true, data: JSON.parse(response.text.trim()), model: "gemini-3.6-flash" });
+      return res.json({ success: true, data: JSON.parse(response.text.trim()), model: "gemini-2.0-flash" });
     } catch (error) {
       console.error("Gemini synthesis error:", error);
       return res.status(502).json({ error: "Gemini file-level synthesis failed" });
