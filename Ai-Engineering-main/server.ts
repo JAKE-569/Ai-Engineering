@@ -6,7 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { calculateFireEngineering } from "./src/lib/fireCalculations";
 import { retrieveRules, runRuleScreening } from "./src/data/dummyRulesDb";
 import fullFireRulesDb from "./src/data/fireRulesFullDb.json";
-import fullTradeRulesDb from "./src/data/tradeRulesFullDb.json";
+import fullTradeRulesDb from "./src/data/constructionRulesDb";
 
 async function startServer() {
   const app = express();
