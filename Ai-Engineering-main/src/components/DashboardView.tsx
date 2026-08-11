@@ -406,7 +406,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   AI 분석 결과
                 </h6>
                 <p className="font-body text-sm leading-relaxed text-[#191c1e] bg-[#f2f4f6] p-4 rounded-lg border-l-4 border-[#000d5f]">
-                  {selectedItem.description}
+                  <span className="block line-clamp-5">{selectedItem.description}</span>
                 </p>
               </section>
               {selectedItem.reviewNarrative && (

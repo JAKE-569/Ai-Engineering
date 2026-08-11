@@ -22,7 +22,12 @@ export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, 
   const documents = useMemo(() => uploadFiles.filter((file) => file.name.toLowerCase().includes(query.toLowerCase())), [uploadFiles, query]);
   if (!errorItem) return null;
   const code = activeMarkup?.codeClause || errorItem.codeClause || '';
-  const clause = (fullFireRulesDb.clauses as any[]).find((item) => code && `${item.code} ${item.clause}`.toLowerCase().includes(code.toLowerCase().split('/')[0].trim()));
+  const normalizedCode = code.replace(/NFTC/gi, 'NFPC').replace(/\s+/g, ' ').trim().toLowerCase();
+  const codeMatch = normalizedCode.match(/(?:nfpc|nftc|kds|kcs|kec)\s*[0-9]+(?:\s*[·./-]\s*[0-9]+)*/i);
+  const clauseNumber = code.match(/(?:제|조\s*)?(\d+)\s*조/i)?.[1];
+  const clauses = fullFireRulesDb.clauses as any[];
+  const clause = clauses.find((item) => codeMatch && item.code.toLowerCase() === codeMatch[0].replace(/\s+/g, ' ').trim()) && clauses.find((item) => codeMatch && item.code.toLowerCase() === codeMatch[0].replace(/\s+/g, ' ').trim() && (!clauseNumber || String(item.clause).includes(clauseNumber)))
+    || clauses.find((item) => codeMatch && item.code.toLowerCase() === codeMatch[0].replace(/\s+/g, ' ').trim());
   const evidence = activeMarkup?.comment || errorItem.description || '도면에서 확인된 증거 데이터가 없습니다.';
   const selectMarkup = (id: string) => setSelectedMarkupId(id);
   return <div className="fixed inset-0 z-[120] bg-slate-950/80 p-0 md:p-3">
