@@ -1,0 +1,30 @@
+{
+  "sources": [
+    { "code": "KDS 11 10 05", "trade": "토목", "title": "지반조사", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "KDS 57 65 00", "trade": "토목", "title": "상수도 배수시설 설계기준", "sourceUrl": "https://www.codil.or.kr/filebank/moct2014/202203/MOCT2852_1.PDF?nserialno=2852", "publisher": "국가건설기준센터" },
+    { "code": "KDS 21 30 00", "trade": "토목", "title": "흙막이·옹벽 안정 검토", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "건축법 시행령 제34조·제35조", "trade": "건축", "title": "피난계단·출구", "sourceUrl": "https://www.law.go.kr/법령/건축법시행령", "publisher": "국가법령정보센터" },
+    { "code": "건축법 시행령 제46조", "trade": "건축", "title": "방화구획", "sourceUrl": "https://www.law.go.kr/법령/건축법시행령", "publisher": "국가법령정보센터" },
+    { "code": "장애인등편의법", "trade": "건축", "title": "장애인 편의시설", "sourceUrl": "https://www.law.go.kr/법령/장애인ㆍ노인ㆍ임산부등의편의증진보장에관한법률", "publisher": "국가법령정보센터" },
+    { "code": "KDS 31 25 10", "trade": "건축기계", "title": "환기·공조 설비", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "KDS 31 30 15", "trade": "건축기계", "title": "기계배관 설비", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "기계설비법 시행규칙", "trade": "건축기계", "title": "기계설비 유지관리", "sourceUrl": "https://www.law.go.kr/법령/기계설비법시행규칙", "publisher": "국가법령정보센터" },
+    { "code": "KEC 140·142", "trade": "건축전기", "title": "접지·피뢰·등전위", "sourceUrl": "https://kec.kea.kr/", "publisher": "대한전기협회" },
+    { "code": "KEC 232", "trade": "건축전기", "title": "배선설비", "sourceUrl": "https://kec.kea.kr/", "publisher": "대한전기협회" },
+    { "code": "KEC 351·352", "trade": "건축전기", "title": "비상전원", "sourceUrl": "https://kec.kea.kr/", "publisher": "대한전기협회" }
+  ],
+  "clauses": [
+    { "code": "KDS 11 10 05", "clause": "지반조사 및 설계정수는 구조물 형식과 하중 조건을 반영하여 확인한다.", "text": "지반조사보고서, 지지력, 침하, 지하수위 및 기초 형식의 적정성을 설계도서와 대조한다.", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "KDS 57 65 00", "clause": "배수시설 설계", "text": "배수시설은 계획유량, 관로 구배, 맨홀 및 유지관리 접근성을 고려하여 계획한다.", "sourceUrl": "https://www.codil.or.kr/filebank/moct2014/202203/MOCT2852_1.PDF?nserialno=2852", "publisher": "국가건설기준센터" },
+    { "code": "KDS 21 30 00", "clause": "흙막이·옹벽", "text": "굴착 및 옹벽은 토압, 배면배수, 활동, 전도, 지지력과 주변 구조물 영향을 검토한다.", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "건축법 시행령 제34조·제35조", "clause": "피난계단 및 직통계단", "text": "건축물의 용도와 규모에 따라 직통계단, 피난계단 및 출구의 설치와 피난동선을 검토한다.", "sourceUrl": "https://www.law.go.kr/법령/건축법시행령", "publisher": "국가법령정보센터" },
+    { "code": "건축법 시행령 제46조", "clause": "방화구획", "text": "면적·층·용도에 따른 방화구획과 방화문·셔터·관통부 처리를 건축 및 설비 도면에서 일치시킨다.", "sourceUrl": "https://www.law.go.kr/법령/건축법시행령", "publisher": "국가법령정보센터" },
+    { "code": "장애인등편의법", "clause": "편의시설", "text": "접근로, 출입구, 경사로, 승강기 및 위생시설의 무장애 동선과 설치조건을 확인한다.", "sourceUrl": "https://www.law.go.kr/법령/장애인ㆍ노인ㆍ임산부등의편의증진보장에관한법률", "publisher": "국가법령정보센터" },
+    { "code": "KDS 31 25 10", "clause": "환기·공조", "text": "실별 환기량, 외기 취입·배기, 덕트 압력손실 및 천장 내 간섭을 확인한다.", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "KDS 31 30 15", "clause": "기계배관", "text": "기계배관은 유량·압력손실·관경·밸브 접근성·배수 및 보온 조건을 확인한다.", "sourceUrl": "https://www.codil.or.kr/", "publisher": "국가건설기준센터" },
+    { "code": "기계설비법 시행규칙", "clause": "기계설비 유지관리", "text": "기계설비는 점검·교체·반입 동선과 유지관리 공간을 확보해야 한다.", "sourceUrl": "https://www.law.go.kr/법령/기계설비법시행규칙", "publisher": "국가법령정보센터" },
+    { "code": "KEC 140·142", "clause": "접지·피뢰", "text": "접지·등전위본딩·피뢰설비의 계통, 보호도체 및 시험계획을 확인한다.", "sourceUrl": "https://kec.kea.kr/", "publisher": "대한전기협회" },
+    { "code": "KEC 232", "clause": "배선설비", "text": "배선설비는 허용전류, 전압강하, 이격, 트레이 충전율 및 방화구획 관통을 확인한다.", "sourceUrl": "https://kec.kea.kr/", "publisher": "대한전기협회" },
+    { "code": "KEC 351·352", "clause": "비상전원", "text": "비상전원은 중요부하, 발전기 용량, 기동전류, 절체시간 및 배선 분리를 확인한다.", "sourceUrl": "https://kec.kea.kr/", "publisher": "대한전기협회" }
+  ]
+}

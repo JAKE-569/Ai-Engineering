@@ -1,4 +1,5 @@
 export type RuleSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
+import { tradeRulesDb } from './tradeRulesDb';
 
 export interface EngineeringRule {
   id: string;
@@ -63,7 +64,7 @@ export const dummyRulesDb: EngineeringRule[] = [
 
 export function retrieveRules(input: { trade: string; docCategory: string; text?: string; fileName?: string }) {
   const haystack = `${input.trade} ${input.docCategory} ${input.text || ''} ${input.fileName || ''}`.toLowerCase();
-  return dummyRulesDb.filter((rule) => rule.trade.includes(input.trade) || rule.keywords.some((keyword) => haystack.includes(keyword.toLowerCase())));
+  return [...dummyRulesDb, ...tradeRulesDb].filter((rule) => rule.trade.includes(input.trade) || rule.keywords.some((keyword) => haystack.includes(keyword.toLowerCase())));
 }
 
 export function runRuleScreening(rules: EngineeringRule[], text: string) {

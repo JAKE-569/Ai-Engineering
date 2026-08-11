@@ -6,6 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { calculateFireEngineering } from "./src/lib/fireCalculations";
 import { retrieveRules, runRuleScreening } from "./src/data/dummyRulesDb";
 import fullFireRulesDb from "./src/data/fireRulesFullDb.json";
+import fullTradeRulesDb from "./src/data/tradeRulesFullDb.json";
 
 async function startServer() {
   const app = express();
@@ -79,7 +80,7 @@ async function startServer() {
           // OCR text is added to this context after the model returns and is screened again.
           const retrievedRules = retrieveRules({ trade: tradeCategory, docCategory, fileName });
           const initialCode = /가스|누설/i.test(`${fileName} ${docCategory}`) ? 'NFPC 206' : /스프링클러|소화/i.test(`${fileName} ${docCategory}`) ? 'NFPC 103' : undefined;
-          const retrievedClauses = fullFireRulesDb.clauses.filter((clause: any) => clause.code === initialCode).slice(0, 12);
+          const retrievedClauses = [...fullFireRulesDb.clauses, ...fullTradeRulesDb.clauses].filter((clause: any) => clause.code === initialCode || `${clause.code} ${clause.clause}`.includes(initialCode)).slice(0, 12);
           const rulesContext = [
             ...retrievedRules.map((rule) => ({ id: rule.id, code: rule.code, title: rule.title, severity: rule.severity, source: rule.source })),
             ...retrievedClauses.map((clause: any) => ({ id: `${clause.code}-${clause.clause}`, code: clause.code, title: clause.clause, text: clause.text, source: { title: clause.code, url: clause.sourceUrl, publisher: clause.publisher } })),
