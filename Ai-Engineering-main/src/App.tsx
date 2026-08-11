@@ -151,8 +151,11 @@ export default function App() {
     reviewData?: {
       reviewItem?: ReviewItem;
       designError?: DesignErrorItem;
+      designErrors?: DesignErrorItem[];
       safetyItem?: SafetyItem;
+      safetyItems?: SafetyItem[];
       veItem?: VeItem;
+      veItems?: VeItem[];
     }
   ) => {
     setUploadFiles((prev) => [newFile, ...prev]);
@@ -160,13 +163,19 @@ export default function App() {
     if (reviewData?.reviewItem) {
       setReviewItems((prev) => [reviewData.reviewItem!, ...prev]);
     }
-    if (reviewData?.designError) {
+    if (reviewData?.designErrors?.length) {
+      setDesignErrors((prev) => [...reviewData.designErrors!, ...prev]);
+    } else if (reviewData?.designError) {
       setDesignErrors((prev) => [reviewData.designError!, ...prev]);
     }
-    if (reviewData?.safetyItem) {
+    if (reviewData?.safetyItems?.length) {
+      setSafetyItems((prev) => [...reviewData.safetyItems!, ...prev]);
+    } else if (reviewData?.safetyItem) {
       setSafetyItems((prev) => [reviewData.safetyItem!, ...prev]);
     }
-    if (reviewData?.veItem) {
+    if (reviewData?.veItems?.length) {
+      setVeItems((prev) => [...reviewData.veItems!, ...prev]);
+    } else if (reviewData?.veItem) {
       setVeItems((prev) => [reviewData.veItem!, ...prev]);
     }
   };

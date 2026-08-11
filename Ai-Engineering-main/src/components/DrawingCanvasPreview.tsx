@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ZoomIn,
   ZoomOut,
@@ -77,6 +77,11 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    if (!selectedMarkupId) return;
+    const selected = markups.find((markup) => markup.id === selectedMarkupId);
+    if (selected?.pageNumber && previewPages.length > 0) setCurrentPage(Math.max(0, Math.min(previewPages.length - 1, selected.pageNumber - 1)));
+  }, [selectedMarkupId, markups, previewPages.length]);
 
   const rawUrl = fileDataUrl || cadUrl;
 
@@ -146,10 +151,10 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
           <span className="font-semibold">PDF 원본 · {fileName}</span>
           <div className="flex items-center gap-2"><button type="button" onClick={handleZoomOut} className="rounded border px-2 py-1 font-bold">−</button><span className="min-w-[42px] text-center">{Math.round(zoomLevel * 100)}%</span><button type="button" onClick={handleZoomIn} className="rounded border px-2 py-1 font-bold">+</button><button type="button" onClick={handleResetView} className="rounded border px-2 py-1 text-[10px]">초기화</button><span className="ml-2">{currentPage + 1} / {previewPages.length}</span><button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} className="rounded border px-2 py-1 disabled:opacity-40">이전</button><button type="button" disabled={currentPage === previewPages.length - 1} onClick={() => setCurrentPage((p) => Math.min(previewPages.length - 1, p + 1))} className="rounded border px-2 py-1 disabled:opacity-40">다음</button></div>
         </div>
-        <div onWheel={handleCtrlWheelZoom} className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-200 p-4">
+        <div onClick={() => { setActiveMarkupId(null); onMarkupSelect?.(''); }} onWheel={handleCtrlWheelZoom} className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-200 p-4">
           <div className="relative inline-block max-h-full max-w-full shadow-xl" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}>
             <img src={previewPages[currentPage]} alt={`${fileName} PDF ${currentPage + 1}페이지`} className="block max-h-[520px] max-w-full object-contain" />
-            {showMarkupLayer && effectiveMarkups.filter((mk) => !mk.pageNumber || mk.pageNumber === currentPage + 1).map((mk, index) => <button type="button" key={mk.id || index} onClick={() => setMarkup(mk.id)} className={`absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white text-[10px] font-bold text-white shadow-lg ${markupTone(mk)} ${activeId === mk.id ? 'ring-4 ring-blue-300' : ''}`} style={{ left: `${mk.xPercent}%`, top: `${mk.yPercent}%` }}>{index + 1}</button>)}
+            {showMarkupLayer && effectiveMarkups.filter((mk) => !mk.pageNumber || mk.pageNumber === currentPage + 1).map((mk, index) => <button type="button" key={mk.id || index} onClick={(event) => { event.stopPropagation(); setMarkup(mk.id); }} className={`absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white text-[10px] font-bold text-white shadow-lg ${markupTone(mk)} ${activeId === mk.id ? 'ring-4 ring-blue-300' : ''}`} style={{ left: `${mk.xPercent}%`, top: `${mk.yPercent}%` }}>{mk.displayIndex || index + 1}</button>)}
             {activeId && (() => { const selected = effectiveMarkups.find((item) => item.id === activeId); if (!selected) return null; const left = Math.min(78, Math.max(22, selected.xPercent || 50)); const top = selected.yPercent || 50; const cardTop = top < 35 ? Math.min(72, top + 10) : Math.max(4, top - 27); return <><svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible"><line x1={`${selected.xPercent}%`} y1={`${top}%`} x2={`${left}%`} y2={`${cardTop}%`} stroke="#2563eb" strokeWidth="2" strokeDasharray="4 3" /></svg><div className="absolute z-30 w-64 -translate-x-1/2 rounded-lg border-2 border-blue-500 bg-white/95 p-3 text-xs shadow-2xl" style={{ left: `${left}%`, top: `${cardTop}%` }}><div className="font-bold text-slate-900">{selected.title}</div><p className="mt-1 leading-5 text-slate-600">{selected.comment}</p>{selected.codeClause && <span className="mt-2 inline-block rounded bg-blue-100 px-2 py-1 text-[10px] font-bold text-blue-800">{selected.codeClause}</span>}</div></>; })()}
           </div>
         </div>

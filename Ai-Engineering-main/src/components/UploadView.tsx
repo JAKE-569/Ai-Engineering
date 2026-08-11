@@ -36,8 +36,11 @@ interface UploadViewProps {
     reviewData?: {
       reviewItem?: ReviewItem;
       designError?: DesignErrorItem;
+      designErrors?: DesignErrorItem[];
       safetyItem?: SafetyItem;
+      safetyItems?: SafetyItem[];
       veItem?: VeItem;
+      veItems?: VeItem[];
     }
   ) => void;
   onDeleteUploadFile: (id: string) => void;
@@ -465,11 +468,15 @@ export const UploadView: React.FC<UploadViewProps> = ({
           status: veBase?.status || '검토대기',
         };
 
+        const allDesignErrors = (apiResult?.designErrors || []).map((item: any, index: number) => ({ ...newDesignError, id: item.id || `${uniqueId}-err-${index}`, errorCode: item.errorCode || `${newDesignError.errorCode}-${index + 1}`, description: item.description || newDesignError.description, type: item.type || newDesignError.type, severity: item.severity || newDesignError.severity, suggestedFix: item.suggestedFix || newDesignError.suggestedFix }));
+        const allSafetyItems = (apiResult?.safetyItems || []).map((item: any, index: number) => ({ ...newSafetyItem, id: item.id || `${uniqueId}-saf-${index}`, summary: item.summary || newSafetyItem.summary, lawRegulation: item.lawRegulation || newSafetyItem.lawRegulation, details: item.details || newSafetyItem.details, evidence: item.evidence || newSafetyItem.evidence, requiredConfirmation: item.requiredConfirmation || newSafetyItem.requiredConfirmation }));
+        const allVeItems = (apiResult?.veItems || []).map((item: any, index: number) => ({ ...newVeItem, id: item.id || `${uniqueId}-ve-${index}`, description: item.description || newVeItem.description, subDescription: item.subDescription || newVeItem.subDescription, location: item.location || newVeItem.location, impactKw: item.impactKw || newVeItem.impactKw, detailItems: item.detailItems || newVeItem.detailItems, calculationBasis: item.calculationBasis || newVeItem.calculationBasis, evidence: item.evidence || newVeItem.evidence }));
+
         onAddUploadFile(newUploadFile, {
           reviewItem: newReviewItem,
-          designError: errorBase ? newDesignError : undefined,
-          safetyItem: safetyBase ? newSafetyItem : undefined,
-          veItem: veBase ? newVeItem : undefined,
+          designError: allDesignErrors[0], designErrors: allDesignErrors,
+          safetyItem: allSafetyItems[0], safetyItems: allSafetyItems,
+          veItem: allVeItems[0], veItems: allVeItems,
         });
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);

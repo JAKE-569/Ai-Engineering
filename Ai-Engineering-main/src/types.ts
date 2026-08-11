@@ -27,6 +27,7 @@ export interface ReviewMarkup {
   correctiveAction?: string;
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
   category?: string;
+  displayIndex?: number;
 }
 
 export interface OcrBlock {
