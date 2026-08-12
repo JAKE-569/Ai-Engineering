@@ -322,7 +322,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Split View Panel (Lower Half) */}
       {selectedItem && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[580px]">
+        <div className="grid grid-cols-1 gap-6 min-h-[580px]">
           {/* Left: Original CAD / Image Document View */}
           <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
@@ -351,7 +351,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
 
-            <div className="flex-1 bg-[#1A1A1A] relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
+            {selectedItem.reviewNarrative && (
+              <div className="grid grid-cols-1 gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-3">
+                {selectedItem.reviewNarrative.drawingOverview && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><b className="text-xs text-blue-700">도면 개요</b><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-800">{compact(selectedItem.reviewNarrative.drawingOverview, 180)}</p></div>}
+                <div className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><b className="text-xs text-slate-900">핵심 검토 항목</b><span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold text-blue-800">{selectedItem.reviewNarrative.checklistReview?.length || 0}건</span></div><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-700">설계·안전·법규 검토 결과를 확인하세요.</p></div>
+                {selectedItem.reviewNarrative.overallOpinion && <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3"><b className="text-xs text-indigo-700">종합 판단</b><p className="mt-1 line-clamp-3 text-xs leading-5 text-indigo-950">{compact(selectedItem.reviewNarrative.overallOpinion, 180)}</p></div>}
+              </div>
+            )}
+            <div className="flex-1 bg-slate-200 relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
               <DrawingCanvasPreview
                 fileDataUrl={drawingDataUrl}
                 cadUrl={drawingDataUrl}
@@ -367,7 +374,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Right: OCR Review Findings & Editor Panel */}
-          <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col shadow-xs">
+          <div className="hidden bg-white border border-[#c6c5d2] rounded-xl flex-col shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] flex justify-between items-center bg-[#f7f9fb]">
               <h5 className="font-headline font-bold text-base text-[#ba1a1a] flex items-center gap-2">
                 <AlertOctagon className="w-5 h-5 text-[#ba1a1a]" />
