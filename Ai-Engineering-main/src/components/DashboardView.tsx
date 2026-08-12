@@ -324,7 +324,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {selectedItem && (
         <div className="relative grid min-h-[580px] grid-cols-1 gap-6">
           {/* Left: Original CAD / Image Document View */}
-          <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
+          <div className="dashboard-source-card bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
               <h5 className="font-headline font-bold text-sm text-[#191c1e] flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#000d5f]" />
@@ -358,7 +358,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {selectedItem.reviewNarrative.overallOpinion && <div className={`rounded-lg border p-3 ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'border-red-200 bg-red-50' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}><div className="flex items-center justify-between"><b className={`text-xs ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'text-red-700' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'text-amber-700' : 'text-emerald-700'}`}>종합 판단</b><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'bg-red-100 text-red-700' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? '심각' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? '주의' : '양호'}</span></div><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-800">{compact(selectedItem.reviewNarrative.overallOpinion, 180)}</p></div>}
               </div>
             )}
-            <div className="flex-1 bg-slate-200 relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
+            <div className="dashboard-drawing-stage flex-1 bg-slate-200 relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
               <DrawingCanvasPreview
                 fileDataUrl={drawingDataUrl}
                 cadUrl={drawingDataUrl}

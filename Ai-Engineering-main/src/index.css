@@ -122,3 +122,8 @@ input, select, textarea { border-color: #b9c8d9 !important; }
 input:focus, select:focus, textarea:focus { border-color: #2c6ebd !important; box-shadow: 0 0 0 3px rgba(44,110,189,0.14); }
 .dashboard-summary-strip > :nth-child(2) { display: none !important; }
 .dashboard-core-panel { scrollbar-width: thin; }
+.dashboard-summary-strip { position: absolute; left: 0; right: 0; top: 70px; z-index: 30; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+.dashboard-source-card { padding-top: 0; }
+.dashboard-drawing-stage { margin-top: 150px; }
+.dashboard-source-card > .dashboard-summary-strip { top: 70px; }
+.dashboard-core-panel { top: 150px; bottom: 0; max-height: none; }
