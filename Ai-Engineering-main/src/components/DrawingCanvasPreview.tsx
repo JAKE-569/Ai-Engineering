@@ -455,8 +455,10 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
 
                     {/* Red Annotation Callout Box */}
                     <div
-                      className={`absolute left-1/2 -translate-x-1/2 mt-2 w-64 p-3 rounded-xl bg-[#1c0404]/95 text-white border-2 border-red-500 shadow-2xl text-[11px] font-sans z-50 transition-all ${
-                        activeMarkupId === mk.id ? 'opacity-100 scale-100' : 'opacity-95 group-hover:opacity-100'
+                      className={`absolute left-1/2 -translate-x-1/2 w-64 p-3 rounded-xl bg-[#1c0404]/95 text-white border-2 border-red-500 shadow-2xl text-[11px] font-sans z-50 transition-all ${
+                        mk.yPercent > 65 ? 'bottom-10 mb-2' : 'top-10 mt-2'
+                      } ${
+                        activeMarkupId === mk.id ? 'pointer-events-auto opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-95 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100'
                       }`}
                     >
                       <div className="font-bold text-red-200 border-b border-white/20 pb-1 mb-1 flex justify-between items-center">
@@ -542,8 +544,10 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
 
                   {/* Markup Callout Box */}
                   <div
-                    className={`absolute left-1/2 -translate-x-1/2 mt-2 w-64 p-2.5 rounded-lg bg-[#050914]/95 text-white border border-red-500 shadow-2xl text-[11px] font-sans z-40 transition-all ${
-                      activeMarkupId === mk.id ? 'opacity-100 scale-100' : 'opacity-90 group-hover:opacity-100'
+                    className={`absolute left-1/2 -translate-x-1/2 w-64 p-2.5 rounded-lg bg-[#050914]/95 text-white border border-red-500 shadow-2xl text-[11px] font-sans z-40 transition-all ${
+                      mk.yPercent > 65 ? 'bottom-10 mb-2' : 'top-10 mt-2'
+                    } ${
+                      activeMarkupId === mk.id ? 'pointer-events-auto opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-95 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100'
                     }`}
                   >
                     <div className="font-bold text-red-300 border-b border-white/10 pb-1 mb-1 flex justify-between items-center">
