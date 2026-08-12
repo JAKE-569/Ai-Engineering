@@ -322,10 +322,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Split View Panel (Lower Half) */}
       {selectedItem && (
-        <div className="relative grid min-h-[580px] grid-cols-1 gap-6">
+        <div className="dashboard-review-layout relative grid min-h-[580px] grid-cols-1 gap-6">
           {/* Left: Original CAD / Image Document View */}
           <div className="dashboard-source-card bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
-            <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
+            <div className="dashboard-source-header px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
               <h5 className="font-headline font-bold text-sm text-[#191c1e] flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#000d5f]" />
                 업로드 도면 원본 ({selectedItem.fileName})
@@ -374,7 +374,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Right: compact core review panel */}
-          <aside className="dashboard-core-panel absolute right-0 top-[190px] z-20 max-h-[calc(100%-190px)] w-[360px] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+          <aside className="dashboard-core-panel max-h-[680px] w-[360px] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
             <div className="mb-4 border-b border-slate-200 pb-3"><h5 className="text-base font-bold text-slate-900">핵심 검토 항목</h5><p className="mt-1 text-xs text-slate-500">도면 프레임과 분리된 검토 목록</p></div>
             <div className="space-y-3">
               {(selectedItem.reviewNarrative?.checklistReview || []).map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 p-3"><div className="flex items-start justify-between gap-2"><b className="text-xs leading-5 text-slate-900">{item.number}. {compact(item.topic, 110)}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '심각' : item.status === 'PASS' ? '양호' : '주의'}</span></div><p className="mt-2 text-xs leading-5 text-slate-600">{compact(item.observation, 180)}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">근거: {compact(item.legalBasis, 100)}</p></div>)}
