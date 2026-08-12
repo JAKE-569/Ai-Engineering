@@ -120,3 +120,5 @@ table th { font-weight: 800; letter-spacing: -0.02em; }
 table tbody tr:hover { background: #edf5ff !important; }
 input, select, textarea { border-color: #b9c8d9 !important; }
 input:focus, select:focus, textarea:focus { border-color: #2c6ebd !important; box-shadow: 0 0 0 3px rgba(44,110,189,0.14); }
+.dashboard-summary-strip > :nth-child(2) { display: none !important; }
+.dashboard-core-panel { scrollbar-width: thin; }

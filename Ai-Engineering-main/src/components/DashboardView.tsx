@@ -322,7 +322,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Split View Panel (Lower Half) */}
       {selectedItem && (
-        <div className="grid min-h-[580px] grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="relative grid min-h-[580px] grid-cols-1 gap-6">
           {/* Left: Original CAD / Image Document View */}
           <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
@@ -352,7 +352,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             {selectedItem.reviewNarrative && (
-              <div className="grid grid-cols-1 gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-3">
+              <div className="dashboard-summary-strip grid grid-cols-1 gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-3">
                 {selectedItem.reviewNarrative.drawingOverview && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><b className="text-xs text-blue-700">도면 개요</b><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-800">{compact(selectedItem.reviewNarrative.drawingOverview, 180)}</p></div>}
                 <div className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><b className="text-xs text-slate-900">핵심 검토 항목</b><span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold text-blue-800">{selectedItem.reviewNarrative.checklistReview?.length || 0}건</span></div><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-700">설계·안전·법규 검토 결과를 확인하세요.</p></div>
                 {selectedItem.reviewNarrative.overallOpinion && <div className={`rounded-lg border p-3 ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'border-red-200 bg-red-50' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}><div className="flex items-center justify-between"><b className={`text-xs ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'text-red-700' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'text-amber-700' : 'text-emerald-700'}`}>종합 판단</b><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'bg-red-100 text-red-700' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? '심각' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? '주의' : '양호'}</span></div><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-800">{compact(selectedItem.reviewNarrative.overallOpinion, 180)}</p></div>}
@@ -374,7 +374,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Right: compact core review panel */}
-          <aside className="min-h-[580px] max-h-[680px] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+          <aside className="dashboard-core-panel absolute right-0 top-[190px] z-20 max-h-[calc(100%-190px)] w-[360px] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
             <div className="mb-4 border-b border-slate-200 pb-3"><h5 className="text-base font-bold text-slate-900">핵심 검토 항목</h5><p className="mt-1 text-xs text-slate-500">도면 프레임과 분리된 검토 목록</p></div>
             <div className="space-y-3">
               {(selectedItem.reviewNarrative?.checklistReview || []).map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 p-3"><div className="flex items-start justify-between gap-2"><b className="text-xs leading-5 text-slate-900">{item.number}. {compact(item.topic, 110)}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '심각' : item.status === 'PASS' ? '양호' : '주의'}</span></div><p className="mt-2 text-xs leading-5 text-slate-600">{compact(item.observation, 180)}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">근거: {compact(item.legalBasis, 100)}</p></div>)}
