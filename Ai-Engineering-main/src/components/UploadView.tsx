@@ -165,11 +165,10 @@ export const UploadView: React.FC<UploadViewProps> = ({
         }
 
         let apiResult: any = null;
-        const pageResults: Array<{ pageIndex: number; data: any }> = [];
-        const reviewPage = async (pageIndex: number) => {
+        for (let pageIndex = 0; pageIndex < reviewPages.length; pageIndex += 1) {
           const reviewDataUrl = reviewPages[pageIndex];
           setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} page ${pageIndex + 1}/${reviewPages.length} Gemini Vision review...`);
-          try {
+        try {
           const controller = new AbortController();
           const timeoutId = window.setTimeout(() => controller.abort(), 90000);
           const response = await fetch('/api/gemini/review-drawing', {
@@ -189,8 +188,39 @@ export const UploadView: React.FC<UploadViewProps> = ({
           window.clearTimeout(timeoutId);
           const data = await response.json();
           if (data.success && data.data) {
+            completedUnits += 1;
+            setBatchProgress({ current: completedUnits, total: totalUnits });
             onAiUsageEvent({ success: true, model: data.model });
-            return { pageIndex, data: data.data };
+            const pageResult = data.data;
+            apiResult = apiResult || {};
+            apiResult.drawingTitle ||= pageResult.drawingTitle;
+            apiResult.drawingNumber ||= pageResult.drawingNumber;
+            apiResult.scale ||= pageResult.scale;
+            apiResult.rawOcrText = [apiResult.rawOcrText, pageResult.rawOcrText ? `[Page ${pageIndex + 1}]\n${pageResult.rawOcrText}` : ''].filter(Boolean).join('\n');
+            for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designErrors', 'safetyItems', 'veItems', 'ruleScreening']) {
+              const pageItems = (pageResult[key] || []).map((item: any, itemIndex: number) => ({
+                ...item,
+                pageNumber: item.pageNumber || pageIndex + 1,
+                ...(key === 'markups' ? { id: `${item.id || `markup-${itemIndex + 1}`}-p${pageIndex + 1}-${itemIndex + 1}` } : {}),
+              }));
+              apiResult[key] = [...(apiResult[key] || []), ...pageItems];
+            }
+            apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
+            if (pageResult.reviewNarrative) {
+              apiResult.reviewNarrative = {
+                ...(apiResult.reviewNarrative || {}),
+                drawingOverview: apiResult.reviewNarrative?.drawingOverview || pageResult.reviewNarrative.drawingOverview,
+                checklistReview: [...(apiResult.reviewNarrative?.checklistReview || []), ...(pageResult.reviewNarrative.checklistReview || [])],
+                preConstructionChecks: [...(apiResult.reviewNarrative?.preConstructionChecks || []), ...(pageResult.reviewNarrative.preConstructionChecks || [])],
+                postConstructionChecks: [...(apiResult.reviewNarrative?.postConstructionChecks || []), ...(pageResult.reviewNarrative.postConstructionChecks || [])],
+                interfaceAndScopeChecks: [...(apiResult.reviewNarrative?.interfaceAndScopeChecks || []), ...(pageResult.reviewNarrative.interfaceAndScopeChecks || [])],
+                siteAndConstructionNotes: [...(apiResult.reviewNarrative?.siteAndConstructionNotes || []), ...(pageResult.reviewNarrative.siteAndConstructionNotes || [])],
+                overallOpinion: pageResult.reviewNarrative.overallOpinion || apiResult.reviewNarrative?.overallOpinion,
+                requiredDocuments: [...(apiResult.reviewNarrative?.requiredDocuments || []), ...(pageResult.reviewNarrative.requiredDocuments || [])],
+              };
+            }
+            apiResult.calculationInputs = { ...(apiResult.calculationInputs || {}), ...(pageResult.calculationInputs || {}) };
+            apiResult.engineeringCalculations = pageResult.engineeringCalculations || apiResult.engineeringCalculations;
           } else {
             onAiUsageEvent({ success: false, rateLimited: response.status === 429 });
             throw new Error(data.error || 'AI visual drawing review failed');
@@ -198,39 +228,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
         } catch (err) {
           if (!(err instanceof Error && err.name === 'AbortError')) onAiUsageEvent({ success: false });
           console.error('API OCR Review call error:', err);
-          return null;
-        }
-        };
-
-        // Preserve every page review, but limit concurrency to two requests so
-        // model quality/rate limits are not harmed by an upload burst.
-        for (let cursor = 0; cursor < reviewPages.length; cursor += 2) {
-          const batch = await Promise.all([reviewPage(cursor), reviewPages[cursor + 1] ? reviewPage(cursor + 1) : Promise.resolve(null)]);
-          batch.filter(Boolean).forEach((result: any) => pageResults.push(result));
-          completedUnits += batch.filter(Boolean).length;
-          setBatchProgress({ current: completedUnits, total: totalUnits });
-        }
-
-        pageResults.sort((a, b) => a.pageIndex - b.pageIndex);
-        for (const { pageIndex, data: pageResult } of pageResults) {
-          apiResult = apiResult || {};
-          apiResult.drawingTitle ||= pageResult.drawingTitle;
-          apiResult.drawingNumber ||= pageResult.drawingNumber;
-          apiResult.scale ||= pageResult.scale;
-          apiResult.rawOcrText = [apiResult.rawOcrText, pageResult.rawOcrText ? `[Page ${pageIndex + 1}]\n${pageResult.rawOcrText}` : ''].filter(Boolean).join('\n');
-          for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designErrors', 'safetyItems', 'veItems', 'ruleScreening']) {
-            const pageItems = (pageResult[key] || []).map((item: any, itemIndex: number) => ({ ...item, pageNumber: item.pageNumber || pageIndex + 1, ...(key === 'markups' ? { id: `${item.id || `markup-${itemIndex + 1}`}-p${pageIndex + 1}-${itemIndex + 1}` } : {}) }));
-            apiResult[key] = [...(apiResult[key] || []), ...pageItems];
-          }
-          apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
-          if (pageResult.reviewNarrative) apiResult.reviewNarrative = { ...(apiResult.reviewNarrative || {}), ...pageResult.reviewNarrative, checklistReview: [...(apiResult.reviewNarrative?.checklistReview || []), ...(pageResult.reviewNarrative.checklistReview || [])] };
-          apiResult.calculationInputs = { ...(apiResult.calculationInputs || {}), ...(pageResult.calculationInputs || {}) };
-          apiResult.engineeringCalculations = pageResult.engineeringCalculations || apiResult.engineeringCalculations;
         }
 
         if (fileType !== 'PDF') {
           completedUnits += 1;
           setBatchProgress({ current: completedUnits, total: totalUnits });
+        }
         }
 
         if (apiResult && reviewPages.length > 1) {
