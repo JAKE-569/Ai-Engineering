@@ -17,19 +17,18 @@ export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, 
   const [selectedMarkupId, setSelectedMarkupId] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMarkupMenuOpen, setIsMarkupMenuOpen] = useState(false);
-  if (!errorItem) return null;
-
   const selectedUpload = uploadFiles.find((file) => file.name === selectedId) || uploadFiles[0];
-  const selectedReview = reviewItems.find((item) => item.fileName === selectedId) || reviewItems.find((item) => item.fileName === errorItem.dwgFile);
+  const selectedReview = reviewItems.find((item) => item.fileName === selectedId) || reviewItems.find((item) => item.fileName === errorItem?.dwgFile);
   const source = selectedUpload || selectedReview;
-  const selectedFileName = selectedUpload?.name || selectedReview?.fileName || errorItem.dwgFile;
+  const selectedFileName = selectedUpload?.name || selectedReview?.fileName || errorItem?.dwgFile;
   const markups = Array.from(new Map([
-    ...(selectedReview?.markups || []), ...(selectedUpload?.markups || []), ...(errorItem.dwgFile === selectedFileName ? (errorItem.markups || []) : []),
+    ...(selectedReview?.markups || []), ...(selectedUpload?.markups || []), ...(errorItem?.dwgFile === selectedFileName ? (errorItem?.markups || []) : []),
   ].map((markup, index) => [markup.id || `markup-${index}`, markup])).values()).map((markup, index) => ({ ...markup, displayIndex: index + 1 }));
   const activeMarkup = markups.find((markup) => markup.id === selectedMarkupId) || markups[0];
   const documents = useMemo(() => uploadFiles.filter((file) => file.name.toLowerCase().includes(query.toLowerCase())), [uploadFiles, query]);
-  const activeSeverity = severityStyle(activeMarkup?.severity || errorItem.severity);
-  const code = activeMarkup?.codeClause || errorItem.codeClause || '적용 법규·기술기준 확인 필요';
+  if (!errorItem) return null;
+  const activeSeverity = severityStyle(activeMarkup?.severity || errorItem?.severity);
+  const code = activeMarkup?.codeClause || errorItem?.codeClause || '적용 법규·기술기준 확인 필요';
   const evidence = (activeMarkup?.evidence || activeMarkup?.comment || errorItem.description || '도면에서 확인된 증거 데이터가 없습니다.').replace(/\s+/g, ' ').trim().slice(0, 100);
   const selectMarkup = (id: string) => { setSelectedMarkupId(id); setIsMarkupMenuOpen(false); };
 
