@@ -38,6 +38,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onUpdateReviewItem,
   searchQuery,
 }) => {
+  const compact = (value?: string, max = 180) => {
+    const text = (value || '').replace(/\s+/g, ' ').trim();
+    if (text.length <= max) return text;
+    const sentence = text.slice(0, max).replace(/[,;|].*$/, '').trim();
+    return `${sentence || text.slice(0, max).trim()}…`;
+  };
   const [selectedItemId, setSelectedItemId] = useState<string>(reviewItems[0]?.id || '');
   const selectedItem = reviewItems.find((item) => item.id === selectedItemId) || reviewItems[0];
   const selectedSource = selectedItem ? uploadFiles.find((file) => file.name === selectedItem.fileName) : undefined;
@@ -406,17 +412,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   AI 분석 결과
                 </h6>
                 <p className="font-body text-sm leading-relaxed text-[#191c1e] bg-[#f2f4f6] p-4 rounded-lg border-l-4 border-[#000d5f]">
-                  <span className="block line-clamp-5">{selectedItem.description}</span>
+                  <span className="block line-clamp-3">{compact(selectedItem.description, 220)}</span>
                 </p>
               </section>
               {selectedItem.reviewNarrative && (
                 <section>
                   <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">전문 설계 검토의견</h6>
                   <div className="space-y-4 rounded-lg border border-blue-200 bg-slate-50 p-4 text-sm text-[#191c1e]">
-                    {selectedItem.reviewNarrative.drawingOverview && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><span className="text-[11px] font-bold text-blue-700">도면 개요</span><p className="mt-1 leading-6">{selectedItem.reviewNarrative.drawingOverview}</p></div>}
+                    {selectedItem.reviewNarrative.drawingOverview && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><span className="text-[11px] font-bold text-blue-700">도면 개요</span><p className="mt-1 leading-6">{compact(selectedItem.reviewNarrative.drawingOverview, 220)}</p></div>}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between"><b className="text-sm text-slate-900">핵심 검토 항목</b><span className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-bold text-blue-800">{selectedItem.reviewNarrative.checklistReview?.length || 0}건</span></div>
-                      {selectedItem.reviewNarrative.checklistReview?.map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-start justify-between gap-3"><b className="text-sm leading-5 text-slate-900">{item.number}. {item.topic}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '보완 필요' : item.status === 'PASS' ? '적합' : '확인 필요'}</span></div><dl className="mt-3 grid gap-2 text-xs leading-5"><div><dt className="font-bold text-slate-500">확인 내용</dt><dd className="text-slate-700">{item.observation}</dd></div><div><dt className="font-bold text-slate-500">적용 기준·근거</dt><dd className="text-slate-700">{item.criteria} · {item.legalBasis}</dd></div><div className="rounded bg-blue-50 p-2"><dt className="font-bold text-blue-700">권고 조치</dt><dd className="text-blue-900">{item.recommendation}</dd></div></dl></div>)}
+                      {selectedItem.reviewNarrative.checklistReview?.map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-start justify-between gap-3"><b className="text-sm leading-5 text-slate-900">{item.number}. {compact(item.topic, 100)}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '보완 필요' : item.status === 'PASS' ? '적합' : '확인 필요'}</span></div><dl className="mt-3 grid gap-2 text-xs leading-5"><div><dt className="font-bold text-slate-500">확인 내용</dt><dd className="text-slate-700">{compact(item.observation)}</dd></div><div><dt className="font-bold text-slate-500">적용 기준·근거</dt><dd className="text-slate-700">{compact(item.criteria, 120)} · {compact(item.legalBasis, 120)}</dd></div><div className="rounded bg-blue-50 p-2"><dt className="font-bold text-blue-700">권고 조치</dt><dd className="text-blue-900">{compact(item.recommendation)}</dd></div></dl></div>)}
                     </div>
                     {[['시공 전 확인사항', selectedItem.reviewNarrative.preConstructionChecks, 'blue'], ['시공 후 확인사항', selectedItem.reviewNarrative.postConstructionChecks, 'violet'], ['타분야·역무범위 확인', selectedItem.reviewNarrative.interfaceAndScopeChecks, 'amber']].map(([label, items, tone]) => Array.isArray(items) && items.length ? <div key={label as string}><div className="mb-2 flex items-center justify-between"><b className="text-sm text-slate-900">{label as string}</b><span className={`rounded-full px-2 py-1 text-[11px] font-bold ${tone === 'amber' ? 'bg-amber-100 text-amber-800' : tone === 'violet' ? 'bg-violet-100 text-violet-800' : 'bg-blue-100 text-blue-800'}`}>{items.length}건</span></div><div className="grid gap-2">{items.map((item: string, index: number) => <div key={`${label}-${index}`} className="rounded border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700"><span className="mr-2 font-bold text-slate-400">{index + 1}</span>{item}</div>)}</div></div> : null)}
                     {selectedItem.reviewNarrative.overallOpinion && <div className="rounded-lg border-l-4 border-indigo-600 bg-indigo-50 p-3"><span className="text-[11px] font-bold text-indigo-700">종합 판단</span><p className="mt-1 leading-6 text-indigo-950">{selectedItem.reviewNarrative.overallOpinion}</p></div>}
