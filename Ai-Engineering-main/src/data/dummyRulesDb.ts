@@ -60,6 +60,13 @@ export const dummyRulesDb: EngineeringRule[] = [
     source: { title: 'KDS 21 30 00 가설 흙막이 설계기준 / KDS 11 00 00 지반 설계기준', url: 'https://www.codil.or.kr/detailAnwGuide.do?nserialno=2434', publisher: '국토교통부·건설기술정보시스템(CODIL)', accessedAt: '2026-08-10' },
     checkCondition: (text) => ({ matched: /보|기둥|구조|굴착|흙막이/i.test(text), status: 'NEEDS_CONFIRMATION', evidence: '구조 또는 토공 관련 정보가 확인되었습니다.', recommendation: '구조계산서·흙막이 계산서·현장 조건과 도면의 치수 및 간섭을 대조하십시오.' }),
   },
+  {
+    id: 'industrial-safety-health-law', trade: ['안전', '소방', '건축', '건축기계', '건축전기', '토목'],
+    keywords: ['산업안전보건법', '산업안전', '안전보건', '위험성평가', '작업계획서', '추락', '끼임', '중량물', '비계', '보호구', '안전난간', '굴착'],
+    code: '산업안전보건법 제38조·제39조·제41조', title: '유해·위험 방지 및 작업계획·위험성평가 확인', severity: 'CRITICAL',
+    source: { title: '산업안전보건법', url: 'https://www.law.go.kr/법령/산업안전보건법', publisher: '국가법령정보센터', accessedAt: '2026-08-12' },
+    checkCondition: (text) => ({ matched: /산업안전보건법|산업안전|안전보건|위험성평가|작업계획서|추락|끼임|중량물|비계|보호구|안전난간|굴착/i.test(text), status: 'NEEDS_CONFIRMATION', evidence: '도면 또는 문서에서 산업안전 관련 작업·위험요소가 확인되어 법정 안전조치 검토가 필요합니다.', recommendation: '위험성평가, 작업계획서, 추락·끼임·굴착·중량물 방지조치, 안전난간·보호구 및 공종 간 작업구역 분리계획을 시공 전 확인하십시오.' }),
+  },
 ];
 
 export function retrieveRules(input: { trade: string; docCategory: string; text?: string; fileName?: string }) {
