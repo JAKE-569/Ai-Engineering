@@ -128,6 +128,8 @@ input:focus, select:focus, textarea:focus { border-color: #2c6ebd !important; bo
 .dashboard-summary-strip { position: static; grid-column: 1 / -1; grid-row: 2; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
 .dashboard-drawing-stage { grid-column: 1; grid-row: 3; min-width: 0; margin-top: 0; border: 1px solid #c6c5d2; border-top: 0; }
 .dashboard-core-panel { grid-column: 2; grid-row: 3; width: auto; max-height: none; min-height: 580px; border-radius: 0 0.75rem 0.75rem 0; }
+.dashboard-source-header, .dashboard-summary-strip, .dashboard-drawing-stage, .dashboard-core-panel { border-color: #b8c7d8 !important; }
+.dashboard-drawing-stage { border: 1px solid #b8c7d8; border-top: 0; }
 @media (max-width: 1023px) {
   .dashboard-review-layout { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; }
   .dashboard-source-header, .dashboard-summary-strip, .dashboard-drawing-stage, .dashboard-core-panel { grid-column: 1; }

@@ -331,7 +331,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 업로드 도면 원본 ({selectedItem.fileName})
               </h5>
               <div className="flex gap-1.5">
-                <button onClick={() => setIsReportOpen(true)} className="px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded">종합 보고서</button>
                 {onOpenOcrModal && (
                   <button
                     onClick={() => onOpenOcrModal(selectedItem)}
@@ -375,6 +374,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Right: compact core review panel */}
           <aside className="dashboard-core-panel max-h-[680px] w-[360px] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+            <button type="button" onClick={() => onOpenCadViewer(selectedItem.fileName, 'ERR-STR-021')} className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#000d5f] px-4 py-4 text-base font-bold text-white shadow-md transition hover:bg-blue-900"><span className="material-symbols-outlined">visibility</span>도면 워크스페이스</button>
             <div className="mb-4 border-b border-slate-200 pb-3"><h5 className="text-base font-bold text-slate-900">핵심 검토 항목</h5><p className="mt-1 text-xs text-slate-500">도면 프레임과 분리된 검토 목록</p></div>
             <div className="space-y-3">
               {(selectedItem.reviewNarrative?.checklistReview || []).map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 p-3"><div className="flex items-start justify-between gap-2"><b className="text-xs leading-5 text-slate-900">{item.number}. {compact(item.topic, 110)}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '심각' : item.status === 'PASS' ? '양호' : '주의'}</span></div><p className="mt-2 text-xs leading-5 text-slate-600">{compact(item.observation, 180)}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">근거: {compact(item.legalBasis, 100)}</p></div>)}
