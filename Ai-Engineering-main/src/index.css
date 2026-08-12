@@ -92,6 +92,8 @@ header .font-headline { font-family: '맑은 고딕', 'Malgun Gothic', sans-seri
 .review-workspace-header h2, .review-workspace-header p { color: inherit !important; }
 .review-workspace-header button { color: #dbeafe !important; }
 .review-workspace-header button:hover { background: rgba(255,255,255,0.12) !important; }
+.review-workspace-grid > aside:first-child { font-size: 14px; font-weight: 700; }
+.review-workspace-grid > aside:first-child button { font-size: 14px; font-weight: 700; }
 main h3 > .material-symbols-outlined { margin-right: 2px; }
 main h3 .dashboard-card-icon {
   display: inline-flex;
