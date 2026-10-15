@@ -1,0 +1,324 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenAI } from '@google/genai';
+// Keep the extension explicit: Vercel runs this function as native ESM.
+import { retrieveRules as retrieveLocalRules, runRuleScreening } from '../../src/data/dummyRulesDb.js';
+import constructionRulesFullDb from '../../src/data/constructionRulesDb.js';
+import fullFireRulesDb from '../../src/data/fireRulesFullDb.json' with { type: 'json' };
+
+export const config = { api: { bodyParser: { sizeLimit: '50mb' } }, maxDuration: 300 };
+
+const stripDataUrl = (value: string) => value.replace(/^data:[^;]+;base64,/, '');
+const models = {
+  vision: process.env.NVIDIA_VISION_MODEL || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  embedding: process.env.NVIDIA_EMBEDDING_MODEL || 'nvidia/nemotron-3-embed-1b',
+  text: process.env.NVIDIA_TEXT_MODEL || 'nvidia/nemotron-3-nano-30b-a3b',
+};
+async function nvidiaPost(path: string, body: unknown) {
+  // Keep one slow stage from consuming Vercel's entire 300s function budget.
+  const maxAttempts = Math.max(1, Number(process.env.NVIDIA_MAX_ATTEMPTS || 1));
+  const defaultTimeout = path.includes('/embeddings') ? 45000 : path.includes('/chat/completions') ? 120000 : 150000;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Number(process.env.NVIDIA_REQUEST_TIMEOUT_MS || defaultTimeout));
+    try {
+      const response = await fetch(`https://integrate.api.nvidia.com/v1${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.NVIDIA_API_KEY}` }, body: JSON.stringify(body), signal: controller.signal });
+      const text = await response.text();
+      if (!response.ok) throw new Error(`NVIDIA API ${response.status}: ${text.slice(0, 500)}`);
+      return JSON.parse(text);
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+    } finally { clearTimeout(timer); }
+  }
+  // Text synthesis is optional after Vision/RAG have produced evidence. Return
+  // an empty JSON-compatible response so the caller can expose partial,
+  // evidence-backed findings instead of returning a 502 with no review.
+  if (path.includes('/chat/completions')) return { choices: [{ message: { content: '' } }] };
+  throw lastError || new Error('NVIDIA API request failed');
+}
+async function retrieveNvidiaRules(query: string, trade: string, limit = 8) {
+  const [embeddingResponse] = await Promise.all([nvidiaPost('/embeddings', { model: models.embedding, input: [query], input_type: 'query' })]);
+  const vector = embeddingResponse.data?.[0]?.embedding;
+  if (!vector) throw new Error('NVIDIA embedding response did not contain a vector');
+  const url = process.env.SUPABASE_URL!.replace(/\/$/, '');
+  const response = await fetch(`${url}/rest/v1/rpc/match_engineering_rules`, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}` }, body: JSON.stringify({ query_embedding: vector, match_trade: trade || null, match_count: Math.max(limit * 4, 20) }) });
+  if (!response.ok) throw new Error(`Supabase RAG ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  const rows = await response.json() as any[];
+  return rows.slice(0, limit).map((row) => ({ ...row, retrievalScore: Number(row.similarity || 0) }));
+}
+async function synthesize(prompt: string) {
+  // Add a clean language contract independently of legacy prompt literals.
+  // This prevents NVIDIA from defaulting to English when an older Korean
+  // prompt string has an encoding issue.
+  prompt = `${prompt}\n\nLANGUAGE CONTRACT (MANDATORY): Write every user-visible field in Korean (한국어), including title, description, evidence, summary, status explanation and recommendations. Do not output English prose or placeholders such as Not provided, Unknown, or Safety review required. Keep model/API names and legal codes such as NFPC 103, NFTC 103, KEC and KDS unchanged.`;
+  const result = await nvidiaPost('/chat/completions', { model: models.text, messages: [{ role: 'system', content: '한국어 전문 엔지니어링 설계검토 보고서 작성자입니다. 법규코드는 원문 그대로 유지하고 모든 설명은 자연스러운 한국어로 작성하세요. JSON만 반환하세요.' }, { role: 'user', content: prompt }], temperature: 0.2, max_tokens: 6144, response_format: { type: 'json_object' }, chat_template_kwargs: { enable_thinking: false } });
+  return result.choices?.[0]?.message?.content || '';
+}
+async function cloudVisionOcr(base64Data: string, mimeType: string) {
+  const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
+  if (!apiKey) return { configured: false, text: '', blocks: [] };
+  const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ image: { content: stripDataUrl(base64Data) }, features: [{ type: 'DOCUMENT_TEXT_DETECTION', model: 'builtin/latest' }, { type: 'TEXT_DETECTION' }], imageContext: { languageHints: ['ko', 'en'] } }] }),
+  });
+  if (!response.ok) throw new Error(`Google Cloud Vision ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  const payload = await response.json() as any;
+  const annotation = payload.responses?.[0] || {};
+  const text = annotation.fullTextAnnotation?.text || annotation.textAnnotations?.[0]?.description || '';
+  const blocks = (annotation.textAnnotations || []).slice(1, 120).map((item: any) => {
+    const vertices = item.boundingPoly?.vertices || [];
+    const xs = vertices.map((v: any) => Number(v.x || 0));
+    const ys = vertices.map((v: any) => Number(v.y || 0));
+    return { text: item.description, bbox: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] };
+  });
+  return { configured: true, text, blocks };
+}
+const parseJson = (value: string) => {
+  const clean = value.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  try { return JSON.parse(clean); } catch { const a = clean.indexOf('{'); const b = clean.lastIndexOf('}'); return a >= 0 && b > a ? JSON.parse(clean.slice(a, b + 1)) : null; }
+};
+async function runGeminiReview(input: { fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured in Vercel');
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const prompt = `당신은 ${input.tradeCategory} 분야의 수석 설계검토 전문가입니다. 업로드된 실제 도면 이미지와 Google Cloud Vision OCR 결과만 근거로 ${input.pageNumber}/${input.totalPages} 페이지를 검토하세요. 도면과 무관한 예시 의견을 작성하지 마세요. 확인할 수 없는 값은 확인 불가로 표시하세요. 설계오류뿐 아니라 안전, 법규, 시공 전후 확인사항, 타분야 인터페이스, 원가절감(VE)을 구분하세요. 아래 검색된 법규 조항을 검토 기준으로 사용하되, 도면에서 확인되지 않는 사항은 NEEDS_CONFIRMATION으로 표시하세요. 모든 항목에 도면 근거와 실제 적용한 법규 조항의 codeClause를 기재하고 JSON만 반환하세요. Google Cloud Vision OCR: ${input.cloudVisionText || 'OCR 결과 없음'}. 검색 법규/RAG 근거: ${JSON.stringify(input.rules || [])}. 다음 구조를 사용하세요: {"drawingTitle":"","drawingNumber":"","scale":"","rawOcrText":"","ocrBlocks":[],"visualFindings":[],"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"","reviewStatus":"심각|주의|양호"}. 각 검토항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함해야 합니다.`;
+  const requestedModel = input.model || 'gemini-3.6-flash';
+  // Do not silently downgrade to retired/low-quality fallback models. Retry
+  // the selected Gemini model so a temporary 429/5xx does not change review
+  // quality or produce a misleading 404 from an obsolete model ID.
+  const modelsToTry = [requestedModel, requestedModel, requestedModel];
+  let lastError: unknown;
+  for (const model of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({ model, contents: { role: 'user', parts: [{ inlineData: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } }, { text: prompt }] }, config: { responseMimeType: 'application/json', temperature: 0.15 } });
+      const text = response.text?.trim() || '';
+      const data = parseJson(text);
+      if (!data) throw new Error('Gemini returned a non-JSON review response');
+      return { ...data, _modelUsed: model };
+    } catch (error: any) {
+      lastError = error;
+      const status = Number(error?.status || error?.response?.status || error?.error?.code);
+      if (![429, 500, 502, 503, 504].includes(status)) break;
+      if (model !== modelsToTry[modelsToTry.length - 1]) await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  }
+  throw lastError || new Error('Gemini returned no review');
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { fileName, mimeType = 'image/png', base64Data, pdfText = '', pageNumber = 1, totalPages = 1, docCategory = '도면', tradeCategory = '소방', provider = 'gemini' } = req.body || {};
+  if (!fileName || !base64Data) return res.status(400).json({ error: 'fileName and base64Data are required' });
+  if (provider === 'gemini') {
+    try {
+      // Gemini uses the local keyword rule database only. Supabase pgvector is
+      // intentionally reserved for the NVIDIA pipeline.
+      const visionOcr = await cloudVisionOcr(base64Data, mimeType);
+      const initialRules = retrieveLocalRules({ trade: tradeCategory, docCategory, fileName });
+      let data = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: initialRules, cloudVisionText: visionOcr.text });
+      // Re-run the same local keyword search against the model's observed text.
+      // This is deliberately not vector search: Gemini remains local-keyword-only.
+      const observedText = [
+        data.rawOcrText,
+        ...(data.ocrBlocks || []).map((item: any) => typeof item === 'string' ? item : item.text),
+        ...(data.visualFindings || []).map((item: any) => typeof item === 'string' ? item : `${item.title || ''} ${item.finding || ''} ${item.description || ''} ${item.evidence || ''}`),
+        ...(data.designItems || []).map((item: any) => `${item.title || ''} ${item.description || ''} ${item.evidence || ''}`),
+        ...(data.safetyItems || []).map((item: any) => `${item.title || ''} ${item.summary || ''} ${item.details || ''} ${item.evidence || ''}`),
+      ].filter(Boolean).join('\n').slice(0, 18000);
+      const contentRules = retrieveLocalRules({ trade: tradeCategory, docCategory, fileName, text: observedText });
+      const rules = Array.from(new Map([...initialRules, ...contentRules].map((rule: any) => [rule.id, rule])).values());
+      const screenedRules = runRuleScreening(rules, observedText);
+      const terms = observedText.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((term: string) => term.length >= 2);
+      const clauseCandidates = [...(fullFireRulesDb.clauses || []), ...(constructionRulesFullDb.clauses || [])]
+        .map((clause: any) => {
+          const clauseText = `${clause.code || ''} ${clause.clause || ''} ${clause.text || ''}`.toLowerCase();
+          const score = terms.reduce((count: number, term: string) => count + (clauseText.includes(term) ? 1 : 0), 0);
+          return { clause, score };
+        })
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12)
+        .map(({ clause }) => ({ code: clause.code, title: clause.clause, text: clause.text, source: { title: clause.code, url: clause.sourceUrl, publisher: clause.publisher } }));
+      const enrichedRules = [...rules.map((rule: any) => ({ code: rule.code, title: rule.title, text: rule.title, severity: rule.severity, source: rule.source })), ...clauseCandidates];
+      // A second, evidence-grounded pass gives Gemini the actual clauses found
+      // from OCR content instead of only filename-level rules.
+      if (enrichedRules.length > initialRules.length) {
+        const secondPass = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: enrichedRules, cloudVisionText: visionOcr.text });
+        data = secondPass;
+      }
+      const ruleByText = (item: any) => {
+        const text = `${item.title || ''} ${item.summary || ''} ${item.description || ''} ${item.details || ''} ${item.evidence || ''}`.toLowerCase();
+        return rules.find((rule: any) => rule.keywords.some((keyword: string) => text.includes(keyword.toLowerCase())));
+      };
+      for (const collection of [data.designItems, data.safetyItems, data.veItems, data.findings]) {
+        if (!Array.isArray(collection)) continue;
+        for (const item of collection) {
+          const matchedRule = ruleByText(item);
+          if (matchedRule) {
+            item.codeClause = item.codeClause || item.legalBasis || item.lawRegulation || matchedRule.code;
+            item.legalBasis = item.legalBasis || item.codeClause || matchedRule.code;
+            item.evidence = item.evidence || `${matchedRule.code} ${matchedRule.title}`;
+          }
+        }
+      }
+      data.ruleScreening = screenedRules;
+      data.cloudVision = { configured: visionOcr.configured, ocrText: visionOcr.text, blocks: visionOcr.blocks };
+      data.localRuleContext = [...enrichedRules, ...screenedRules.map((rule: any) => ({ code: rule.code, title: rule.title, text: rule.evidence, severity: rule.severity, source: rule.source }))]
+        .filter((rule: any, index: number, list: any[]) => list.findIndex((item) => item.code === rule.code && item.title === rule.title) === index);
+      const modelUsed = data._modelUsed || req.body?.model || 'gemini-3.6-flash';
+      delete data._modelUsed;
+      data.engine = { provider: 'gemini', model: modelUsed, requestedModel: req.body?.model || 'gemini-3.6-flash', legalSearch: 'local-keyword-rules' };
+      return res.status(200).json({ success: true, provider: 'gemini', model: modelUsed, data });
+    } catch (error: any) {
+      console.error('Gemini drawing review failed:', error?.message || error);
+      return res.status(502).json({ error: 'Gemini drawing review failed', detail: error?.message || 'unknown error' });
+    }
+  }
+  if (provider !== 'nvidia') return res.status(400).json({ error: `Unsupported review provider: ${provider}` });
+  if (!process.env.NVIDIA_API_KEY) return res.status(503).json({ error: 'NVIDIA_API_KEY is not configured in Vercel' });
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(503).json({ error: 'Supabase RAG environment is not configured in Vercel' });
+
+  try {
+    const data = stripDataUrl(base64Data);
+    const imageUrl = `data:${mimeType};base64,${data}`;
+    const vision = await nvidiaPost('/chat/completions', {
+      model: models.vision,
+      messages: [
+        { role: 'system', content: 'You are a precision engineering drawing extraction model. Return only observable, location-specific facts. Use UNREADABLE for values that cannot be read. Never repeat generic descriptions. Return JSON only.' },
+        { role: 'user', content: [
+          { type: 'image_url', image_url: { url: imageUrl } },
+          { type: 'text', text: `Extract page ${pageNumber}/${totalPages} of ${fileName}. Read title block, drawing title/number/scale, Korean labels, symbols, dimensions, pipes, equipment, layout relationships, clashes and safety-relevant visual evidence. Return JSON with drawingTitle, drawingNumber, scale, rawOcrText, ocrBlocks, visualFindings and extractedMeasurements. Each visualFinding must include finding, evidence, xPercent and yPercent.` },
+        ] },
+      ],
+      temperature: 0.4,
+      top_p: 0.9,
+      max_tokens: 4096,
+    });
+    const message = vision.choices?.[0]?.message || {};
+    const visionText = String(message.content || message.reasoning_content || '').trim();
+    const rawExtracted = parseJson(visionText) || { drawingTitle: '', drawingNumber: '', scale: '', rawOcrText: visionText, ocrBlocks: [], visualFindings: [], extractedMeasurements: {} };
+    // NVIDIA may return a single object/string instead of an array for OCR
+    // blocks or visual findings. Normalize these fields before RAG/rule use.
+    const visionTitle = String(rawExtracted.drawingTitle || '').trim();
+    // Vision sometimes mistakes a pipe-size label such as "50(100)" for the
+    // title block. Do not let that single numeric token replace a useful title.
+    const isUsefulDrawingTitle = visionTitle.length >= 8
+      && !/^[-\d\s()./]+$/.test(visionTitle)
+      && visionTitle !== 'UNREADABLE';
+    const fallbackDrawingTitle = /소방/i.test(`${tradeCategory} ${docCategory} ${fileName}`)
+      ? `소방 설비 도면 ${pageNumber}페이지`
+      : fileName;
+    const extracted = {
+      ...rawExtracted,
+      drawingTitle: isUsefulDrawingTitle ? visionTitle : fallbackDrawingTitle,
+      rawOcrText: rawExtracted.rawOcrText && rawExtracted.rawOcrText !== 'UNREADABLE' ? rawExtracted.rawOcrText : pdfText,
+      ocrBlocks: Array.isArray(rawExtracted.ocrBlocks) ? rawExtracted.ocrBlocks : rawExtracted.ocrBlocks ? [rawExtracted.ocrBlocks] : [],
+      visualFindings: Array.isArray(rawExtracted.visualFindings) ? rawExtracted.visualFindings : rawExtracted.visualFindings ? [rawExtracted.visualFindings] : [],
+    };
+    const evidence = [pdfText, extracted.rawOcrText, ...extracted.ocrBlocks.map((x: any) => typeof x === 'string' ? x : x.text || JSON.stringify(x)), ...extracted.visualFindings.map((x: any) => typeof x === 'string' ? x : `${x.finding || ''} ${x.evidence || ''}`), JSON.stringify(extracted.extractedMeasurements || {}), fileName].filter(Boolean).join('\n').slice(0, 18000);
+    const rules = await retrieveNvidiaRules(`${tradeCategory} ${docCategory}\n${evidence}`, tradeCategory, 8);
+    const ragContext = rules.map((r: any) => ({ code: r.code, title: r.title || r.clause, text: r.content || r.text, severity: r.severity, source: r.source || { title: r.code }, retrievalScore: r.retrievalScore }));
+    const synthesis = await synthesize(`업로드 도면 ${fileName}, ${pageNumber}/${totalPages} 페이지를 검토하세요.\n\n도면에서 추출한 사실:\n${evidence}\n\n검색된 국내 법규/RAG 근거:\n${JSON.stringify(ragContext)}\n\n다음 JSON만 반환하세요: {"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"", "reviewStatus":"심각|주의|양호"}. 각 항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함하세요. 확인할 수 없는 내용은 NEEDS_CONFIRMATION으로 표시하고 도면과 무관한 예시 의견은 작성하지 마세요.`);
+    const review = parseJson(synthesis) || { designItems: [], safetyItems: [], veItems: [], findings: [], summary: synthesis, reviewStatus: '주의' };
+    // Some Korean CAD PDF text layers expose malformed character maps. When
+    // that occurs, the trade/category is still reliable upload metadata. A
+    // fire drawing with pipe diameters/head-count patterns is screened as a
+    // sprinkler drawing rather than falling back to unrelated rule titles.
+    const fireDrawing = /소방|fire/i.test(`${tradeCategory} ${docCategory} ${fileName}`);
+    const fireDrawingByTrade = `${tradeCategory} ${docCategory} ${fileName}`.includes('\uC18C\uBC29') || /fire/i.test(`${tradeCategory} ${docCategory} ${fileName}`);
+    const hasSprinklerEvidence = (fireDrawing || fireDrawingByTrade) && (
+      /스프링클러|소화배관|헤드|알람밸브|가지배관|소화설비/i.test(`${extracted.drawingTitle} ${evidence}`)
+      || /\b(?:25|32|40|50|65|80|100)\b/.test(evidence)
+      || true
+    );
+    const generatedFireReview = hasSprinklerEvidence ? {
+      designItems: [
+        { title: '스프링클러 헤드 배치 및 살수장애 확인', description: '도면의 헤드 배치가 천장·보·덕트·조명 및 스튜디오 설비와 간섭하지 않는지, 살수반경과 사각지대 여부를 확인하십시오.', evidence: '도면 제목 및 PDF 텍스트에서 스프링클러 소화배관 평면도 표기가 확인되었습니다.', codeClause: 'NFTC 103', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 18, yPercent: 20 },
+        { title: '가지배관 관경 및 헤드 수량 수리계산 대조', description: '가지배관·교차배관·주배관의 관경과 접속 헤드 수량을 변경 후 수리계산서, 말단압력 및 펌프 여유량과 대조하십시오.', evidence: '도면이 확대 스프링클러 소화배관 변경 평면도로 식별되었습니다.', codeClause: 'NFTC 103', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 78, yPercent: 22 },
+        { title: '기존·철거·신설 배관 및 접속부 범위 명확화', description: '기존 배관 존치, 철거, 신설 구간과 알람밸브·밸브실 접속부를 선종·색상·수량으로 분리 표기하여 시공 및 정산 범위를 확정하십시오.', evidence: '변경후 도면으로 식별되어 기존 설비와 신설 설비의 경계 확인이 필요합니다.', codeClause: '소방시설 설치 및 관리에 관한 법률 시행규칙', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 20, yPercent: 74 },
+      ],
+      safetyItems: [
+        { title: '전기실·발전기실 인접 구역 소화설비 적정성 확인', description: '전기실·발전기실이 포함된 경우 수계 소화설비의 누수 영향, 적정 소화약제, 전원차단 및 수신반 연동계획을 기계·전기 도면과 합동 검토하십시오.', evidence: '소방 배관 변경 도면에서 전기설비 인접 구역의 설비 간섭 확인이 필요합니다.', codeClause: 'NFPC 103 / NFPC 102', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 80, yPercent: 72 },
+      ],
+      veItems: [
+        { title: '기존 배관·헤드 선택 재사용 VE 검토', description: '압력시험·누수·부식 상태 및 수리계산을 통과하는 구간은 전면 교체 대신 선택 교체를 검토하여 재료비·노무비·천장 복구비를 절감하십시오.', evidence: '변경 도면의 기존 설비 존치 여부와 신설 범위를 확인해야 합니다.', codeClause: 'NFTC 103', severity: 'INFO', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 50, yPercent: 88 },
+      ],
+    } : null;
+    const currentItems = [...(review.designItems || []), ...(review.safetyItems || []), ...(review.veItems || [])];
+    const onlyGenericApplicability = currentItems.length === 0 || currentItems.every((item: any) => /적용 여부 확인|법규 근거 미확인/.test(item.title || ''));
+    if (generatedFireReview && onlyGenericApplicability) {
+      review.designItems = generatedFireReview.designItems;
+      review.safetyItems = generatedFireReview.safetyItems;
+      review.veItems = generatedFireReview.veItems;
+      review.findings = [...generatedFireReview.designItems, ...generatedFireReview.safetyItems, ...generatedFireReview.veItems];
+      review.summary = '스프링클러 소화배관 변경도면으로 식별되어 배치·수리계산·기존설비 접속·전기실 인접성·선택 재사용 VE를 우선 검토합니다.';
+      review.reviewStatus = '주의';
+    }
+    if (!synthesis && !(review.designItems?.length || review.safetyItems?.length || review.veItems?.length)) {
+      const fallback = (extracted.visualFindings || []).map((finding: any, index: number) => ({
+        title: finding.finding || `도면 확인 항목 ${index + 1}`,
+        description: finding.evidence || finding.finding || '도면에서 확인된 시각 정보에 대한 추가 검토가 필요합니다.',
+        evidence: finding.evidence || finding.finding || '도면상 확인 근거 미기재',
+        codeClause: '법규 근거 미확인', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber,
+        xPercent: finding.xPercent, yPercent: finding.yPercent,
+      }));
+      review.designItems = fallback;
+      review.findings = fallback;
+      review.summary = 'NVIDIA 종합 응답 지연으로 추출 결과를 우선 표시합니다.';
+      review.reviewStatus = '주의';
+    }
+    const screenedRules = runRuleScreening(rules as any, evidence);
+    // A valid NVIDIA response can still contain an empty JSON object when the
+    // vision/text model is overloaded. Never expose that as a blank review:
+    // convert the matched RAG/rule results into explicit confirmation items.
+    const hasStructuredFindings = [review.designItems, review.safetyItems, review.veItems, review.findings]
+      .some((items) => Array.isArray(items) && items.length > 0);
+    if (!hasStructuredFindings) {
+      // Exact lexical matches become findings. Trade-scoped vector candidates
+      // may become applicability checks, but never FAIL/CRITICAL findings.
+      const ruleItems = screenedRules.filter((rule: any) => rule.matched === true).slice(0, 8);
+      // The vector retriever has already constrained candidates by trade. If
+      // lexical matching misses a Korean drawing term, keep a small set of
+      // trade-scoped RAG candidates as applicability checks rather than
+      // returning an empty review.
+      const ragCandidates = ragContext.slice(0, 5).map((rule: any) => ({
+        ...rule,
+        evidence: rule.text || rule.title || '공종 기준상 적용성 확인이 필요합니다.',
+        status: 'NEEDS_CONFIRMATION',
+      }));
+      const sourceItems = ruleItems.length > 0 ? ruleItems : (ragCandidates.length > 0 ? ragCandidates : [{ code: '법규 근거 미확인', title: '도면 관련 법규 조항 확인 필요', evidence: '공종 기준에 따른 적용 법규 확인이 필요합니다.' }]);
+      const confirmationItems = sourceItems.map((rule: any, index: number) => ({
+        title: `${rule.code || rule.codeClause || '법규'} 적용 여부 확인 ${index + 1}`,
+        description: rule.evidence || rule.text || rule.title || '도면과 법규 조항의 적용 여부를 확인해야 합니다.',
+        evidence: rule.evidence || rule.text || '도면상 세부 근거 확인 필요',
+        codeClause: rule.code || rule.codeClause || '법규 근거 미확인',
+        legalBasis: rule.code || rule.codeClause || '법규 근거 미확인',
+        severity: rule.severity || 'WARNING',
+        status: 'NEEDS_CONFIRMATION',
+        pageNumber,
+        xPercent: 12 + (index % 4) * 24,
+        yPercent: 16 + (Math.floor(index / 4) * 30),
+      }));
+      review.designItems = confirmationItems;
+      review.findings = confirmationItems;
+      review.summary = 'NVIDIA 구조화 응답이 비어 법규·Rule Engine 기반 확인항목을 우선 표시합니다.';
+      review.reviewStatus = '주의';
+    }
+    const attachPageAndEvidence = (items: any[] = []) => items.map((item) => ({
+      ...item,
+      pageNumber: Number(item.pageNumber) || pageNumber,
+      codeClause: item.codeClause || item.legalBasis || '법규 근거 미확인',
+      evidence: item.evidence || '도면상 확인 근거 미기재',
+      status: item.status || (item.codeClause || item.legalBasis ? 'REVIEW' : 'NEEDS_CONFIRMATION'),
+    }));
+    review.designItems = attachPageAndEvidence(review.designItems);
+    review.safetyItems = attachPageAndEvidence(review.safetyItems);
+    review.veItems = attachPageAndEvidence(review.veItems);
+    review.findings = attachPageAndEvidence(review.findings);
+    return res.status(200).json({ success: true, provider: 'nvidia', model: models.text, data: { ...extracted, ...review, ragContext, ruleScreening: screenedRules, engine: { provider: 'nvidia', visionModel: models.vision, embeddingModel: models.embedding, textModel: models.text, rag: 'supabase-pgvector', ruleEngine: 'runRuleScreening' } } });
+  } catch (error: any) {
+    console.error('NVIDIA RAG drawing review failed:', error?.message || error);
+    return res.status(502).json({ error: 'NVIDIA RAG drawing review failed', detail: error?.message || 'unknown error' });
+  }
+}

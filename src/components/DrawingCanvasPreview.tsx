@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { PdfCanvasRenderer } from './PdfCanvasRenderer';
+import React, { useEffect, useState } from 'react';
 import {
   ZoomIn,
   ZoomOut,
@@ -20,6 +19,7 @@ import {
 import { DocCategory, TradeCategory, ReviewMarkup } from '../types';
 
 interface DrawingCanvasPreviewProps {
+  previewPages?: string[];
   fileDataUrl?: string;
   cadUrl?: string;
   drawingTitle?: string;
@@ -28,41 +28,25 @@ interface DrawingCanvasPreviewProps {
   fileName?: string;
   docCategory?: DocCategory;
   tradeCategory?: TradeCategory;
-  ocrBlocks?: { id?: string; text: string; category: string; confidence?: number }[];
+  ocrBlocks?: {
+    id?: string;
+    text: string;
+    category: string;
+    confidence?: number;
+    bbox?: { x: number; y: number; width: number; height: number };
+  }[];
+  selectedOcrBlockId?: string | null;
+  onOcrBlockSelect?: (id: string) => void;
   markups?: ReviewMarkup[];
+  selectedMarkupId?: string;
+  onMarkupSelect?: (id: string) => void;
   highlightError?: { errorCode?: string; description?: string };
   className?: string;
   maxHeight?: string;
 }
 
-function getBlobUrlFromDataUrl(dataUrl: string): string | null {
-  if (!dataUrl) return null;
-  if (dataUrl.startsWith('blob:') || dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
-    return dataUrl;
-  }
-  try {
-    const parts = dataUrl.split(',');
-    if (parts.length < 2) return null;
-    let mime = 'application/pdf';
-    const mimeMatch = parts[0].match(/:(.*?);/);
-    if (mimeMatch && mimeMatch[1] && mimeMatch[1] !== 'application/octet-stream') {
-      mime = mimeMatch[1];
-    }
-    const bstr = atob(parts[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    const blob = new Blob([u8arr], { type: mime });
-    return URL.createObjectURL(blob);
-  } catch (err) {
-    console.error('Failed to convert data URL to Blob URL:', err);
-    return null;
-  }
-}
-
 export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
+  previewPages = [],
   fileDataUrl,
   cadUrl,
   drawingTitle,
@@ -72,48 +56,43 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   docCategory = '도면',
   tradeCategory = '소방',
   ocrBlocks = [],
+  selectedOcrBlockId = null,
+  onOcrBlockSelect,
   markups = [],
+  selectedMarkupId,
+  onMarkupSelect,
   highlightError,
   className = '',
   maxHeight = '580px',
 }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState(0);
   const [showPipingLayer, setShowPipingLayer] = useState<boolean>(true);
   const [showDetectionLayer, setShowDetectionLayer] = useState<boolean>(true);
   const [showRadiusLayer, setShowRadiusLayer] = useState<boolean>(true);
   const [showOcrLayer, setShowOcrLayer] = useState<boolean>(true);
   const [showMarkupLayer, setShowMarkupLayer] = useState<boolean>(true);
-  const [activeMarkupId, setActiveMarkupId] = useState<string | null>(null);
+  const [activeMarkupId, setActiveMarkupId] = useState<string | null>(selectedMarkupId || null);
   const [imageError, setImageError] = useState<boolean>(false);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  useEffect(() => {
+    if (!selectedMarkupId) return;
+    const selected = markups.find((markup) => markup.id === selectedMarkupId);
+    if (selected?.pageNumber && previewPages.length > 0) setCurrentPage(Math.max(0, Math.min(previewPages.length - 1, selected.pageNumber - 1)));
+  }, [selectedMarkupId, markups, previewPages.length]);
 
   const rawUrl = fileDataUrl || cadUrl;
 
-  // Generate safe Blob URL for iframe embedding and popup viewing
-  useEffect(() => {
-    if (rawUrl && rawUrl.startsWith('data:')) {
-      const created = getBlobUrlFromDataUrl(rawUrl);
-      setBlobUrl(created);
-      return () => {
-        if (created && created.startsWith('blob:')) {
-          URL.revokeObjectURL(created);
-        }
-      };
-    } else if (rawUrl && (rawUrl.startsWith('blob:') || rawUrl.startsWith('http'))) {
-      setBlobUrl(rawUrl);
-    } else {
-      setBlobUrl(null);
-    }
-  }, [rawUrl]);
-
-  // Check data format (handles .pdf files, base64 PDF data, and drawing category items)
-  const isPdfData = Boolean(
-    (fileName && fileName.toLowerCase().endsWith('.pdf')) ||
-    (fileDataUrl && fileDataUrl.includes('application/pdf')) ||
-    (cadUrl && cadUrl.toLowerCase().endsWith('.pdf')) ||
-    (rawUrl && (rawUrl.startsWith('data:application/pdf') || rawUrl.toLowerCase().endsWith('.pdf') || rawUrl.includes('type=pdf'))) ||
-    docCategory === '도면'
-  );
+  // Check data format
+  const displayUrl = previewPages[currentPage] || rawUrl;
+  const isPdfData =
+    rawUrl &&
+    previewPages.length === 0 &&
+    (rawUrl.startsWith('data:application/pdf') ||
+      rawUrl.toLowerCase().endsWith('.pdf') ||
+      rawUrl.includes('type=pdf'));
 
   const isImageMime =
     rawUrl &&
@@ -126,92 +105,79 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.25, 2.5));
   const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.25, 0.5));
   const handleResetZoom = () => setZoomLevel(1);
+  const handleCtrlWheelZoom = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    setZoomLevel((prev) => Math.min(2.5, Math.max(0.5, Number((prev + direction * 0.1).toFixed(2)))));
+  };
+  const handleResetView = () => {
+    setZoomLevel(1);
+    setPan({ x: 0, y: 0 });
+  };
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsPanning(true);
+    setPanStart({ x: event.clientX - pan.x, y: event.clientY - pan.y });
+  };
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPanning) return;
+    setPan({ x: event.clientX - panStart.x, y: event.clientY - panStart.y });
+  };
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPanning) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setIsPanning(false);
+  };
 
   const title = drawingTitle || fileName || `${tradeCategory} ${docCategory} 정밀 검토도`;
   const dwgNo = drawingNumber || `DWG-${tradeCategory.substring(0, 2).toUpperCase()}-2024-001`;
 
-  const handleOpenNewWindow = () => {
-    const w = window.open('', '_blank');
-    if (w) {
-      const markupHtml = effectiveMarkups.map((m, idx) => `
-        <div style="background:#fef2f2; border:2px solid #ef4444; border-radius:8px; padding:12px; margin-bottom:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#991b1b; margin-bottom:6px;">
-            <span style="font-size:13px;">🔴 [빨간색 주석 ${idx + 1}] ${m.title || '기술기준 및 시공 상세 지적'}</span>
-            <span style="background:#dc2626; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-family:monospace;">${m.severity || 'CRITICAL'}</span>
-          </div>
-          <div style="color:#7f1d1d; font-size:12px; line-height:1.5; background:white; padding:10px; border-radius:6px; border-left:4px solid #dc2626; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-            ${m.comment}
-          </div>
-          ${m.codeClause ? `<div style="font-size:11px; color:#991b1b; margin-top:6px; font-family:monospace;"><strong>적용 법규/기술기준:</strong> ${m.codeClause}</div>` : ''}
-        </div>
-      `).join('');
-
-      w.document.write(`
-        <!DOCTYPE html>
-        <html lang="ko">
-        <head>
-          <meta charset="utf-8">
-          <title>[POSCO AI] ${title} - PDF 도면 및 마크업 검토 보고서</title>
-          <style>
-            body { margin: 0; padding: 24px; background: #0b1329; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; }
-            .card { background: #1e293b; border: 2px solid #3b82f6; border-radius: 1rem; max-width: 900px; width: 100%; padding: 2rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #ef4444; padding-bottom: 1rem; margin-bottom: 1.5rem; }
-            .tag { background: #ef4444; color: white; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: bold; font-size: 0.75rem; font-family: monospace; }
-            h1 { margin: 0.5rem 0 0.25rem 0; font-size: 1.35rem; color: #60a5fa; }
-            .meta { font-size: 0.8rem; color: #94a3b8; }
-            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #0f172a; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-size: 0.8rem; }
-            .grid-label { color: #64748b; font-size: 0.7rem; display: block; margin-bottom: 2px; }
-            .grid-val { font-weight: bold; color: #e2e8f0; font-family: monospace; }
-            .section-title { color: #fca5a5; font-size: 0.95rem; font-weight: bold; margin: 1.5rem 0 0.75rem 0; }
-            .btn-print { background: #2563eb; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; }
-            .btn-print:hover { background: #1d4ed8; }
-            @media print {
-              body { background: white; color: black; }
-              .card { box-shadow: none; border: none; background: white; color: black; }
-              .btn-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <div class="header">
-              <div>
-                <span class="tag">POSCO PLANT AI ENGINEERING REVIEW</span>
-                <h1>${title}</h1>
-                <div class="meta">도서구분: ${docCategory} | 공종: ${tradeCategory} | 축척: ${scale}</div>
-              </div>
-              <div style="text-align: right;">
-                <button class="btn-print" onclick="window.print()">🖨️ 보고서 인쇄 / PDF 저장</button>
-                <div style="font-family: monospace; font-size: 11px; color: #94a3b8; margin-top: 8px;">${dwgNo}</div>
-              </div>
-            </div>
-
-            <div class="grid">
-              <div><span class="grid-label">파일명</span><span class="grid-val">${fileName || title}</span></div>
-              <div><span class="grid-label">공종</span><span class="grid-val">${tradeCategory}</span></div>
-              <div><span class="grid-label">도서분류</span><span class="grid-val">${docCategory}</span></div>
-              <div><span class="grid-label">기술기준</span><span class="grid-val">KDS/KEC/NFTC</span></div>
-            </div>
-
-            <div class="section-title">🔴 빨간색 마크업 지적 및 법규 준수 검토결과 (${effectiveMarkups.length}건)</div>
-            ${markupHtml}
-
-            <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #334155; text-align: center; font-family: monospace; font-size: 0.7rem; color: #64748b;">
-              POSCO PLANT ENGINEERING DIVISION - AI AUTOMATED DRAWING REVIEW
-            </div>
-          </div>
-        </body>
-        </html>
-      `);
-      w.document.close();
-    }
+  // Only render markups returned by the actual drawing review.
+  // Never render an unassigned markup on every page. Older NVIDIA responses
+  // could omit pageNumber, which caused one page's annotations to repeat on
+  // the entire drawing set. Until the backend supplies a verified page, keep
+  // the item on page 1 only.
+  const effectiveMarkups: ReviewMarkup[] = (markups || []).map((markup) => ({
+    ...markup,
+    pageNumber: Number.isFinite(Number(markup.pageNumber)) && Number(markup.pageNumber) > 0
+      ? Number(markup.pageNumber)
+      : 1,
+  }));
+  const activeId = selectedMarkupId || activeMarkupId;
+  const setMarkup = (id: string) => { setActiveMarkupId(id); onMarkupSelect?.(id); };
+  const markupTone = (markup: ReviewMarkup) => {
+    const category = `${markup.category || ''}`;
+    if (/원가|VE|절감|cost/i.test(category)) return 'bg-emerald-600';
+    if (/안전|법규|safety/i.test(category)) return 'bg-amber-500';
+    return markup.severity === 'CRITICAL' ? 'bg-red-600' : markup.severity === 'WARNING' ? 'bg-orange-500' : 'bg-blue-600';
   };
-
-  // Default fallback markups if none provided
-  const effectiveMarkups: ReviewMarkup[] =
-    markups && markups.length > 0
-      ? markups
-      : [
+  const markupCardTone = (markup: ReviewMarkup) => {
+    const category = `${markup.category || ''}`;
+    if (/원가|VE|절감|cost/i.test(category)) return 'border-emerald-500 bg-emerald-950/95';
+    if (/안전|법규|safety/i.test(category)) return 'border-amber-500 bg-amber-950/95';
+    return markup.severity === 'CRITICAL' ? 'border-red-500 bg-red-950/95' : markup.severity === 'WARNING' ? 'border-orange-500 bg-orange-950/95' : 'border-blue-500 bg-blue-950/95';
+  };
+  if (previewPages.length > 0) {
+    return (
+      <div className={`relative flex h-full min-h-[420px] flex-col overflow-hidden rounded-lg bg-slate-100 ${className}`}>
+        <div className="flex items-center justify-between border-b border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
+          <span className="font-semibold">PDF 원본 · {fileName}</span>
+          <div className="flex items-center gap-2"><button type="button" onClick={handleZoomOut} className="rounded border px-2 py-1 font-bold">−</button><span className="min-w-[42px] text-center">{Math.round(zoomLevel * 100)}%</span><button type="button" onClick={handleZoomIn} className="rounded border px-2 py-1 font-bold">+</button><button type="button" onClick={handleResetView} className="rounded border px-2 py-1 text-[10px]">초기화</button><span className="ml-2">{currentPage + 1} / {previewPages.length}</span><button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} className="rounded border px-2 py-1 disabled:opacity-40">이전</button><button type="button" disabled={currentPage === previewPages.length - 1} onClick={() => setCurrentPage((p) => Math.min(previewPages.length - 1, p + 1))} className="rounded border px-2 py-1 disabled:opacity-40">다음</button></div>
+        </div>
+        <div onClick={() => { setActiveMarkupId(null); onMarkupSelect?.(''); }} onWheel={handleCtrlWheelZoom} className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-200 p-4">
+          <div className="relative inline-block max-h-full max-w-full shadow-xl" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}>
+            <img src={previewPages[currentPage]} alt={`${fileName} PDF ${currentPage + 1}페이지`} className="block max-h-full max-w-full object-contain" />
+            {showMarkupLayer && effectiveMarkups.filter((mk) => mk.pageNumber === currentPage + 1).map((mk, index) => <button type="button" key={mk.id || index} onClick={(event) => { event.stopPropagation(); setMarkup(mk.id); }} className={`absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white text-[10px] font-bold text-white shadow-lg ${markupTone(mk)} ${activeId === mk.id ? 'ring-4 ring-blue-300' : ''}`} style={{ left: `${mk.xPercent}%`, top: `${mk.yPercent}%` }}>{mk.displayIndex || effectiveMarkups.indexOf(mk) + 1}</button>)}
+            {activeId && (() => { const selected = effectiveMarkups.find((item) => item.id === activeId); if (!selected) return null; const markerLeft = selected.xPercent || 50; const markerTop = selected.yPercent || 50; const cardLeft = markerLeft < 50 ? Math.min(82, markerLeft + 22) : Math.max(18, markerLeft - 22); const cardTop = markerTop < 48 ? Math.min(76, markerTop + 16) : Math.max(4, markerTop - 30); const elbowX = markerLeft < 50 ? Math.min(86, markerLeft + 10) : Math.max(14, markerLeft - 10); return <><svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible"><polyline points={`${markerLeft},${markerTop} ${elbowX},${markerTop} ${cardLeft},${cardTop}`} vectorEffect="non-scaling-stroke" fill="none" stroke="currentColor" className={markupTone(selected).replace('bg-', 'text-')} strokeWidth="2" strokeDasharray="5 3" /></svg><div className={`absolute z-30 w-64 -translate-x-1/2 rounded-lg border-2 p-3 text-xs text-white shadow-2xl ${markupCardTone(selected)}`} style={{ left: `${cardLeft}%`, top: `${cardTop}%` }}><div className="font-bold text-white">{selected.title}</div><p className="mt-1 leading-5 text-white/90">{selected.comment}</p>{selected.codeClause && <span className="mt-2 inline-block rounded bg-white/20 px-2 py-1 text-[10px] font-bold text-white">{selected.codeClause}</span>}</div></>; })()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  /* legacy example markups removed
+      [
           {
             id: 'm1',
             xPercent: 35,
@@ -266,7 +232,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                 : '소방시설법 / NFTC',
             severity: 'WARNING',
           },
-        ];
+        ]; */
 
   return (
     <div
@@ -287,17 +253,6 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
 
         {/* View Toggles & Zoom Controls */}
         <div className="flex items-center gap-2">
-          {isPdfData && (
-            <button
-              onClick={handleOpenNewWindow}
-              className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="PDF 원본 새 탭에서 열기"
-            >
-              <FileCheck className="w-3.5 h-3.5" />
-              PDF 원본 새 탭 보기
-            </button>
-          )}
-
           <div className="flex items-center gap-1 bg-[#131d31] px-2 py-1 rounded border border-white/10">
             <button
               onClick={() => setShowMarkupLayer(!showMarkupLayer)}
@@ -320,7 +275,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
             </button>
             <button
               onClick={() => setShowOcrLayer(!showOcrLayer)}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+              className={`hidden px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
                 showOcrLayer ? 'bg-emerald-600 text-white' : 'text-white/40 hover:text-white'
               }`}
               title="OCR 오버레이"
@@ -354,42 +309,226 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
+            <button
+              onClick={handleResetView}
+              className="px-1.5 py-0.5 text-[10px] text-white/70 hover:text-white hover:bg-white/10 rounded cursor-pointer"
+              title="화면 맞춤"
+            >
+              맞춤
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Drawing Stage Area */}
-      <div className="relative flex-1 flex items-center justify-center p-3 overflow-auto bg-[#0a111e]">
+      <div
+        className={`relative flex-1 flex items-center justify-center p-3 overflow-auto bg-[#0a111e] ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onWheel={handleCtrlWheelZoom}
+      >
         {/* Render PDF Document if uploaded format is PDF */}
         {isPdfData ? (
-          <div className="w-full h-full flex flex-col items-center justify-center relative p-2">
-            <PdfCanvasRenderer
-              pdfSource={blobUrl || rawUrl}
-              tradeCategory={tradeCategory}
-              docCategory={docCategory}
-              drawingTitle={title}
-              drawingNumber={dwgNo}
-              scale={scale}
-              markups={effectiveMarkups}
-              showMarkupLayer={showMarkupLayer}
-              activeMarkupId={activeMarkupId}
-              onSelectMarkup={(id) => setActiveMarkupId(id)}
-              className="w-full h-[550px]"
-            />
+          <div
+            className="w-full h-full flex flex-col items-center justify-center transition-transform duration-150 relative p-2"
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}
+          >
+            {/* PDF Sheet Box & Viewer Stage */}
+            <div className="relative w-full max-w-4xl min-h-[500px] bg-white text-gray-900 rounded-lg shadow-2xl border border-gray-300 p-6 flex flex-col justify-between overflow-hidden">
+              {/* PDF Header Stamp & Red Markups Indicator */}
+              <div className="border-b-2 border-red-600 pb-3 mb-3 flex flex-wrap items-center justify-between font-mono text-xs gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="bg-red-600 text-white font-bold px-2.5 py-1 rounded text-xs tracking-wider flex items-center gap-1 shadow-sm">
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                    PDF 미리보기
+                  </span>
+                  <span className="font-bold text-[#000d5f] text-sm">{title}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded border border-red-300 flex items-center gap-1">
+                    🔴 빨간색 마크업 주석 ({effectiveMarkups.length}개 지적)
+                  </span>
+                  <span className="text-gray-500 font-mono">{dwgNo}</span>
+                </div>
+              </div>
+
+              {/* Real PDF Embed or Interactive PDF Sheet Content */}
+              {rawUrl && isPdfData ? (
+                <div className="relative w-full h-[400px]">
+                  <object
+                    data={rawUrl}
+                    type="application/pdf"
+                    className="w-full h-full rounded border border-gray-300 shadow-inner"
+                  >
+                    <iframe
+                      src={rawUrl}
+                      className="w-full h-full rounded border border-gray-300"
+                      title={`${tradeCategory} PDF Document`}
+                    />
+                  </object>
+                </div>
+              ) : (
+                <div className="w-full h-[390px] bg-gray-50 border border-gray-200 rounded-lg p-5 relative overflow-auto font-mono text-xs text-gray-800 space-y-4 shadow-inner">
+                  {previewPages.length > 0 && (
+                    <div className="mb-2 flex items-center justify-between rounded bg-slate-900 px-2 py-1 text-[10px] text-white">
+                      <span>PDF 원본 페이지 {currentPage + 1} / {previewPages.length}</span>
+                      <span className="flex gap-1"><button type="button" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}>이전</button><button type="button" disabled={currentPage === previewPages.length - 1} onClick={() => setCurrentPage((p) => Math.min(previewPages.length - 1, p + 1))}>다음</button></span>
+                    </div>
+                  )}
+                  {previewPages.length > 0 && <img src={displayUrl} alt={`${fileName} page ${currentPage + 1}`} className="mb-3 max-h-[360px] w-full object-contain rounded border border-slate-300 bg-white" />}
+                  {/* PDF Document Summary Block */}
+                  <div className="bg-white p-3.5 rounded-md border border-gray-300 shadow-xs flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-sm text-[#000d5f] block">📄 PDF 도면 세부 사양</span>
+                      <p className="text-[11px] text-gray-600 mt-0.5 font-sans">
+                        공종: <strong className="text-blue-900">{tradeCategory}</strong> | 분류:{' '}
+                        <strong>{docCategory}</strong> | 축척: <strong>{scale}</strong> | 엔지니어링 기준:{' '}
+                        <strong className="text-emerald-800">KDS / KEC / NFTC 준수</strong>
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 bg-red-600 text-white rounded text-[11px] font-bold shadow-xs">
+                      RED ANNOTATIONS ACTIVE
+                    </span>
+                  </div>
+
+                  {/* Red Law & Error Violation Box 1 */}
+                  <div className="bg-red-50/90 border-2 border-red-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
+                    <div className="flex items-center justify-between border-b border-red-200 pb-1.5 font-bold text-red-900">
+                      <span className="flex items-center gap-1.5 text-xs">
+                        🔴 [빨간색 주석 1] {tradeCategory} 공종 ({title}) 법규 위반 및 규격 미달 지적
+                      </span>
+                      <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
+                        CRITICAL
+                      </span>
+                    </div>
+                    <p className="text-red-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-red-600 shadow-2xs">
+                      {tradeCategory === '토목'
+                        ? `${title}: KDS 11 10 00 / KDS 21 30 00 기준 H-Pile 흙막이 앵커 긴장력 부족 및 사면 토압 검토 필요.`
+                        : tradeCategory === '건축'
+                        ? `${title}: 건축법 시행령 제34조 직통계단 보행거리 38.5m(법정 30m 이하) 초과 및 피난동선 보정 지적.`
+                        : tradeCategory === '건축기계'
+                        ? `${title}: KDS 31 25 10 공조 급기 덕트(SA) 풍속 8.5m/s 과다(기준 6.0m/s 이하) 및 소음기 설치 필요.`
+                        : tradeCategory === '건축전기'
+                        ? `${title}: KEC(한국전기설비규정) 230 수전반 메인 케이블 허용전류 및 전선관 충전율 40% 초과 지적.`
+                        : `${title}: NFTC 102/103 화재안전기술기준 스프링클러 헤드 살수반경(R=2.3m) 미달 및 가지배관 직경 보정 요구.`}
+                    </p>
+                  </div>
+
+                  {/* Red Law & Error Violation Box 2 */}
+                  <div className="bg-amber-50/90 border-2 border-amber-500 p-4 rounded-lg shadow-xs space-y-2 text-[11px] relative">
+                    <div className="flex items-center justify-between border-b border-amber-200 pb-1.5 font-bold text-amber-900">
+                      <span className="flex items-center gap-1.5 text-xs">
+                        🔴 [빨간색 주석 2] {tradeCategory} 공종 안전성 & 법규 준수 재검토 필요
+                      </span>
+                      <span className="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
+                        WARNING
+                      </span>
+                    </div>
+                    <p className="text-amber-950 leading-relaxed font-sans bg-white p-2.5 rounded border-l-4 border-amber-500 shadow-2xs">
+                      {tradeCategory === '토목'
+                        ? `${title}: 지하안전관리에 관한 특별법 및 KDS 44 50 00 우수관 구배(1/150) 부족 및 계측기(Inclinometer) 누락.`
+                        : tradeCategory === '건축'
+                        ? `${title}: 건축법 시행령 제46조 방화구획 내화성능 2시간 방화문 표기 및 준불연 단열재 스펙 재확인.`
+                        : tradeCategory === '건축기계'
+                        ? `${title}: 방화구획 관통부 방화댐퍼(FD) 표기 누락 및 급탕 순환 펌프 양정 수치 보정 필요.`
+                        : tradeCategory === '건축전기'
+                        ? `${title}: 변전실 방폭구역 등급 지정 및 소방 비상전원 연동 조도(300 Lux) 확보 필요.`
+                        : `${title}: 소방시설법 자동화재탐지설비 감지기 감응거리 초과 및 비상전원 수신반 연동 점검.`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Red Markups Overlay on PDF Stage */}
+              {showMarkupLayer &&
+                effectiveMarkups.map((mk, idx) => (
+                  <div
+                    key={`pdf-mk-${mk.id || idx}`}
+                    style={{ top: `${mk.yPercent}%`, left: `${mk.xPercent}%` }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMarkupId(activeMarkupId === mk.id ? null : mk.id);
+                    }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer z-40 group"
+                  >
+                    {/* Pulsing Red Pin */}
+                    <div className="relative flex items-center justify-center">
+                      <span className="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-red-500 opacity-75"></span>
+                      <div className="relative inline-flex rounded-full h-8 w-8 bg-red-600 text-white font-mono font-bold text-xs items-center justify-center border-2 border-white shadow-2xl hover:scale-110 transition-transform">
+                        {idx + 1}
+                      </div>
+                    </div>
+
+                    {/* Red Annotation Callout Box */}
+                    <div
+                      className={`absolute left-1/2 -translate-x-1/2 w-64 p-3 rounded-xl bg-[#1c0404]/95 text-white border-2 border-red-500 shadow-2xl text-[11px] font-sans z-50 transition-all ${
+                        mk.yPercent > 65 ? 'bottom-10 mb-2' : 'top-10 mt-2'
+                      } ${
+                        activeMarkupId === mk.id ? 'pointer-events-auto opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-95 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100'
+                      }`}
+                    >
+                      <div className="font-bold text-red-200 border-b border-white/20 pb-1 mb-1 flex justify-between items-center">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                          {mk.title}
+                        </span>
+                        {mk.codeClause && (
+                          <span className="text-[9px] bg-red-900 text-red-100 px-1.5 py-0.5 rounded font-mono border border-red-400">
+                            {mk.codeClause}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-red-100 text-[10px] leading-relaxed bg-red-950/80 p-2 rounded border-l-2 border-red-400 mt-1">
+                        🔴 [빨간색 주석] {mk.comment}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+              {/* PDF Footer Stamp */}
+              <div className="mt-3 pt-2 border-t border-gray-300 flex justify-between items-center text-[10px] font-mono text-gray-500">
+                <span>POSCO AI PDF DRAWING VERIFICATION ENGINE</span>
+                <span>STATUS: RED MARKUPS ACTIVE</span>
+              </div>
+            </div>
           </div>
         ) : isImageMime ? (
           /* Render Uploaded Real Image with Zoom & OCR / Markup overlays */
           <div
             className="relative flex items-center justify-center transition-transform duration-150"
-            style={{ transform: `scale(${zoomLevel})` }}
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}
           >
             <img
-              src={rawUrl}
+              src={displayUrl}
               alt="Uploaded Engineering Document"
               onError={() => setImageError(true)}
               className="max-w-full object-contain rounded shadow-2xl border border-white/20"
               style={{ maxHeight: '480px' }}
             />
+
+            {showOcrLayer && ocrBlocks.map((block, index) => {
+              const bbox = block.bbox || { x: 8 + (index % 3) * 28, y: 12 + Math.floor(index / 3) * 16, width: 20, height: 8 };
+              const id = block.id || `ocr-${index}`;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-label={`OCR 영역: ${block.text}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOcrBlockSelect?.(id);
+                  }}
+                  className={`absolute border-2 rounded-sm transition-colors ${selectedOcrBlockId === id ? 'border-yellow-300 bg-yellow-300/30 shadow-[0_0_0_3px_rgba(253,224,71,0.35)]' : 'border-emerald-400/80 bg-emerald-400/10 hover:bg-emerald-400/25'}`}
+                  style={{ left: `${bbox.x}%`, top: `${bbox.y}%`, width: `${bbox.width}%`, height: `${bbox.height}%` }}
+                >
+                  <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-emerald-950/90 px-1 text-[9px] text-emerald-100">
+                    OCR {block.confidence ?? 0}%
+                  </span>
+                </button>
+              );
+            })}
 
             {/* Visual Review Markups Overlay on Uploaded Image */}
             {showMarkupLayer &&
@@ -406,15 +545,17 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
                   {/* Pin Circle */}
                   <div className="relative flex items-center justify-center">
                     <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-75"></span>
-                    <div className="relative inline-flex rounded-full h-8 w-8 bg-red-600 text-white font-mono font-bold text-xs items-center justify-center border-2 border-white shadow-xl hover:scale-110 transition-transform">
+                    <div className={`relative inline-flex rounded-full h-8 w-8 ${markupTone(mk)} text-white font-mono font-bold text-xs items-center justify-center border-2 border-white shadow-xl hover:scale-110 transition-transform cursor-move`}>
                       {idx + 1}
                     </div>
                   </div>
 
                   {/* Markup Callout Box */}
                   <div
-                    className={`absolute left-1/2 -translate-x-1/2 mt-2 w-64 p-2.5 rounded-lg bg-[#050914]/95 text-white border border-red-500 shadow-2xl text-[11px] font-sans z-40 transition-all ${
-                      activeMarkupId === mk.id ? 'opacity-100 scale-100' : 'opacity-90 group-hover:opacity-100'
+                    className={`absolute left-1/2 -translate-x-1/2 w-64 p-2.5 rounded-lg bg-[#050914]/95 text-white border border-red-500 shadow-2xl text-[11px] font-sans z-40 transition-all ${
+                      mk.yPercent > 65 ? 'bottom-10 mb-2' : 'top-10 mt-2'
+                    } ${
+                      activeMarkupId === mk.id ? 'pointer-events-auto opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-95 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:scale-100'
                     }`}
                   >
                     <div className="font-bold text-red-300 border-b border-white/10 pb-1 mb-1 flex justify-between items-center">
@@ -445,7 +586,7 @@ export const DrawingCanvasPreview: React.FC<DrawingCanvasPreviewProps> = ({
           /* Render Specialized Trade CAD Vector Drawing */
           <div
             className="w-full h-full flex items-center justify-center transition-transform duration-150 relative"
-            style={{ transform: `scale(${zoomLevel})` }}
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})` }}
           >
             <svg
               viewBox="0 0 1000 640"

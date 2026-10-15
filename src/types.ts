@@ -1,4 +1,5 @@
-export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'deploy_guide';
+export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'report' | 'deploy_guide';
+export type ReviewProvider = 'gemini' | 'nvidia';
 
 export type DocCategory = '도면' | '시방서' | '내역서';
 export type TradeCategory = '토목' | '건축' | '건축기계' | '건축전기' | '소방';
@@ -15,13 +16,19 @@ export type SeverityLevel = 'CRITICAL' | 'WARNING' | 'INFO' | '위험' | '주의
 
 export interface ReviewMarkup {
   id: string;
+  pageNumber?: number;
   xPercent: number; // 0~100
   yPercent: number; // 0~100
   title: string;
   comment: string;
   codeClause?: string;
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
+  correctiveAction?: string;
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
   category?: string;
+  displayIndex?: number;
 }
 
 export interface OcrBlock {
@@ -32,7 +39,33 @@ export interface OcrBlock {
   bbox?: { x: number; y: number; width: number; height: number };
 }
 
+export interface FireCalculationResult {
+  key: string;
+  label: string;
+  status: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  calculated?: number;
+  required?: number;
+  unit: string;
+  formula: string;
+  inputs: Record<string, number>;
+  note: string;
+}
+
+export interface ReviewNarrative {
+  drawingOverview?: string;
+  checklistReview?: { number: number; topic: string; criteria: string; observation: string; status: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION'; evidence: string; legalBasis: string; recommendation: string }[];
+  preConstructionChecks?: string[];
+  postConstructionChecks?: string[];
+  interfaceAndScopeChecks?: string[];
+  siteAndConstructionNotes?: string[];
+  overallOpinion?: string;
+  requiredDocuments?: string[];
+}
+
 export interface ReviewItem {
+  reviewNarrative?: ReviewNarrative;
+  engineeringCalculations?: FireCalculationResult[];
+  previewPages?: string[];
   id: string;
   fileName: string;
   fileType: string;
@@ -68,12 +101,17 @@ export interface SafetyItem {
   severity: '위험' | '주의' | '정상';
   status: string;
   details?: string;
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
+  requiredConfirmation?: string;
   cadUrl?: string;
   fileDataUrl?: string;
   markups?: ReviewMarkup[];
 }
 
 export interface DesignErrorItem {
+  previewPages?: string[];
   id: string;
   errorCode: string;
   dwgFile: string;
@@ -93,6 +131,8 @@ export interface DesignErrorItem {
 }
 
 export interface VeItem {
+  detailItems?: { label: string; category?: '재료비' | '노무비' | '경비'; quantity?: string; unitPrice?: number; amount?: number; formula?: string }[];
+  costBreakdown?: { materialCost?: number; laborCost?: number; expenseCost?: number; basis?: string };
   id: string;
   type: 'VE 제안' | '수량 오류';
   docCategory?: DocCategory;
@@ -108,10 +148,16 @@ export interface VeItem {
   savingsRate?: number; // 절감률 (%)
   scheduleDays?: number; // 공기 영향 (일)
   calculationBasis?: string; // 세부 산출 근거
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
   unitPriceComparison?: string; // 단가 비교 요약
 }
 
 export interface UploadFile {
+  reviewNarrative?: ReviewNarrative;
+  engineeringCalculations?: FireCalculationResult[];
+  previewPages?: string[];
   id: string;
   name: string;
   type: 'CAD' | 'PDF' | 'Spec' | 'BoQ' | 'Image';
@@ -135,4 +181,3 @@ export interface SupabaseConfig {
   anonKey: string;
   isConnected: boolean;
 }
-

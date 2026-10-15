@@ -1,6 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { UploadFile, PageTab, ReviewItem, DesignErrorItem, SafetyItem, VeItem, DocCategory, TradeCategory } from '../types';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { UploadFile, PageTab, ReviewItem, DesignErrorItem, SafetyItem, VeItem, DocCategory, TradeCategory, ReviewProvider } from '../types';
 import { PdfViewerModal } from './PdfViewerModal';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/legacy/build/pdf.worker.mjs',
+  import.meta.url,
+).toString();
 import {
   UploadCloud,
   FileCheck,
@@ -30,18 +36,22 @@ interface UploadViewProps {
     reviewData?: {
       reviewItem?: ReviewItem;
       designError?: DesignErrorItem;
+      designErrors?: DesignErrorItem[];
       safetyItem?: SafetyItem;
+      safetyItems?: SafetyItem[];
       veItem?: VeItem;
+      veItems?: VeItem[];
     }
   ) => void;
   onDeleteUploadFile: (id: string) => void;
   onSelectTab: (tab: PageTab) => void;
   onOpenOcrModal: (file: UploadFile) => void;
-  onOpenPdfViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
+  onAiUsageEvent: (event: { success: boolean; rateLimited?: boolean; model?: string }) => void;
 }
 
 const DOC_CATEGORIES: { id: DocCategory; label: string; desc: string; icon: string }[] = [
-  { id: '도면', label: '도면 (Drawing)', desc: 'PDF 평면도, 단면도, 계통도', icon: 'architecture' },
+  { id: '도면', label: '도면 (Drawing)', desc: 'CAD / PDF 평면도, 단면도, 계통도', icon: 'architecture' },
   { id: '시방서', label: '시방서 (Specification)', desc: '공사 시방서, 자재 표준 스펙', icon: 'description' },
   { id: '내역서', label: '내역서 (BoQ / Cost)', desc: '공사비 산출 내역서, 일위대가', icon: 'table_chart' },
 ];
@@ -60,16 +70,20 @@ export const UploadView: React.FC<UploadViewProps> = ({
   onDeleteUploadFile,
   onSelectTab,
   onOpenOcrModal,
-  onOpenPdfViewer,
+  onOpenCadViewer,
+  onAiUsageEvent,
 }) => {
   const [selectedDocCategory, setSelectedDocCategory] = useState<DocCategory>('도면');
   const [selectedTradeCategory, setSelectedTradeCategory] = useState<TradeCategory>('소방');
+  const [reviewProvider, setReviewProvider] = useState<ReviewProvider>('gemini');
+  const [reviewModel, setReviewModel] = useState('gemini-3.6-flash');
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [pdfPreviewFile, setPdfPreviewFile] = useState<UploadFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pdfTextByPageRef = useRef<string[]>([]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -89,38 +103,67 @@ export const UploadView: React.FC<UploadViewProps> = ({
     });
   };
 
+  const renderPdfPagesAsImages = async (pdfDataUrl: string, provider: ReviewProvider): Promise<string[]> => {
+    const base64 = pdfDataUrl.split(',')[1] || '';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const pdf = await pdfjsLib.getDocument({ data: bytes, disableWorker: true } as any).promise;
+    const pages: string[] = [];
+    pdfTextByPageRef.current = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      pdfTextByPageRef.current[pageNumber - 1] = textContent.items.map((item: any) => item.str || '').join(' ').slice(0, 12000);
+      // Drawing sheets contain small title-block text and dimension labels.
+      // The previous 1.25 scale plus 95KB resize cap made NVIDIA receive a
+      // thumbnail, which led to UNREADABLE extraction. Keep NVIDIA at the
+      // same high-resolution render as Gemini and only compress when needed.
+      const viewport = page.getViewport({ scale: provider === 'nvidia' ? 2.5 : 2.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Unable to create PDF rendering canvas');
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      if (provider === 'nvidia') {
+        // NVIDIA NIM vision rejects large inline images. Keep enough resolution
+        // for drawing symbols while staying below the inline payload limit.
+        let outputCanvas = canvas;
+        let imageData = outputCanvas.toDataURL('image/jpeg', 0.72);
+        while (imageData.length > 240000 && outputCanvas.width > 1200) {
+          const resized = document.createElement('canvas');
+          resized.width = Math.round(outputCanvas.width * 0.8);
+          resized.height = Math.round(outputCanvas.height * 0.8);
+          const resizedContext = resized.getContext('2d');
+          if (!resizedContext) break;
+          resizedContext.drawImage(outputCanvas, 0, 0, resized.width, resized.height);
+          outputCanvas = resized;
+          imageData = outputCanvas.toDataURL('image/jpeg', 0.72);
+        }
+        pages.push(imageData);
+      } else {
+        pages.push(canvas.toDataURL('image/png'));
+      }
+    }
+    return pages;
+  };
+
   const processBatchFiles = async (filesList: FileList | File[]) => {
     const files = Array.from(filesList);
     if (files.length === 0) return;
 
-    // Filter out unsupported DWG/non-PDF files when uploading drawings
-    const validFiles: File[] = [];
-    for (const f of files) {
-      const ext = f.name.split('.').pop()?.toLowerCase() || '';
-
-      if (ext === 'dwg' || ext === 'dxf') {
-        alert(`[업로드 제한] 도면 업로드는 DWG/DXF 파일이 제외되며, PDF 파일만 업로드 가능합니다.\n(제외된 파일: ${f.name})`);
-        continue;
-      }
-
-      if (selectedDocCategory === '도면' && ext !== 'pdf') {
-        alert(`[업로드 제한] 도서 구분이 [도면]일 경우 PDF 도면만 업로드 가능합니다. (DWG/DXF 제외)\n(제외된 파일: ${f.name})`);
-        continue;
-      }
-
-      validFiles.push(f);
-    }
-
-    if (validFiles.length === 0) return;
-
     setIsProcessing(true);
-    setBatchProgress({ current: 0, total: validFiles.length });
+    let completedUnits = 0;
+    let totalUnits = files.length;
+    setBatchProgress({ current: 0, total: totalUnits });
 
-    for (let i = 0; i < validFiles.length; i++) {
-      const file = validFiles[i];
-      setBatchProgress({ current: i + 1, total: validFiles.length });
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      let sourceDataUrl = '';
+      setBatchProgress({ current: completedUnits, total: totalUnits });
       setProcessingStatus(
-        `[${i + 1}/${validFiles.length}] "${file.name}" Gemini Vision OCR 및 ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
+        `[${i + 1}/${files.length}] "${file.name}" ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron Vision' : 'Gemini Vision'} ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
       );
 
       if (i > 0) {
@@ -129,6 +172,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
       try {
         const fileDataUrl = await readFileAsDataUrl(file);
+        sourceDataUrl = fileDataUrl;
         const ext = file.name.split('.').pop()?.toLowerCase() || '';
         let fileType: UploadFile['type'] = 'CAD';
         if (['pdf'].includes(ext)) fileType = 'PDF';
@@ -138,34 +182,193 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         const sizeMB = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1;
 
-        let apiResult = null;
+        let reviewPages = [fileDataUrl];
+        let reviewMimeType = file.type || 'image/png';
+        if (fileType === 'PDF') {
+          setProcessingStatus(`[${i + 1}/${files.length}] PDF 페이지를 이미지로 변환하여 ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron Vision' : 'Gemini Vision'} 검토 중...`);
+          reviewPages = await renderPdfPagesAsImages(fileDataUrl, reviewProvider);
+          totalUnits += reviewPages.length - 1;
+          setBatchProgress({ current: completedUnits, total: totalUnits });
+          reviewMimeType = reviewProvider === 'nvidia' ? 'image/jpeg' : 'image/png';
+        }
+
+        let apiResult: any = null;
+        let pageReviewFailures = 0;
+        const reviewPageWithRetry = async (reviewDataUrl: string, pageNumber: number) => {
+          if (reviewProvider === 'nvidia' && !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(reviewDataUrl)) {
+            throw new Error(`NVIDIA 검토 요청 중 이미지 변환 결과가 없습니다. PDF를 페이지 이미지로 변환하지 못했습니다 (page ${pageNumber}).`);
+          }
+          let lastError: unknown;
+          const maxAttempts = reviewProvider === 'nvidia' ? 1 : 3;
+          for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), 330000);
+            try {
+              const detectedMimeType = reviewDataUrl.match(/^data:(image\/[^;]+);base64,/i)?.[1];
+              const response = await fetch('/api/gemini/review-drawing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
+                body: JSON.stringify({ fileName: file.name, pageNumber, totalPages: reviewPages.length, mimeType: detectedMimeType || reviewMimeType, base64Data: reviewDataUrl, pdfText: pdfTextByPageRef.current[pageNumber - 1] || '', docCategory: selectedDocCategory, tradeCategory: selectedTradeCategory, provider: reviewProvider, model: reviewModel, skipPageSynthesis: reviewProvider === 'nvidia' && reviewPages.length > 1 }),
+              });
+              window.clearTimeout(timeoutId);
+              if (response.ok) return response;
+              const detail = await response.text();
+              lastError = new Error(`page ${pageNumber} review failed (${response.status}): ${detail.slice(0, 180)}`);
+              if (response.status !== 429 && response.status < 500) break;
+            } catch (error) {
+              window.clearTimeout(timeoutId);
+              lastError = error;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, 1500 * (attempt + 1)));
+          }
+          throw lastError instanceof Error ? lastError : new Error(`page ${pageNumber} review failed`);
+        };
+        for (let pageIndex = 0; pageIndex < reviewPages.length; pageIndex += 1) {
+          const reviewDataUrl = reviewPages[pageIndex];
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} page ${pageIndex + 1}/${reviewPages.length} ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron 검토' : 'Gemini Vision 검토'}...`);
         try {
-          const response = await fetch('/api/gemini/review-drawing', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileName: file.name,
-              mimeType: file.type || 'image/png',
-              base64Data: fileDataUrl,
-              docCategory: selectedDocCategory,
-              tradeCategory: selectedTradeCategory,
-            }),
-          });
+          const response = await reviewPageWithRetry(reviewDataUrl, pageIndex + 1);
           const data = await response.json();
           if (data.success && data.data) {
-            apiResult = data.data;
+            completedUnits += 1;
+            setBatchProgress({ current: completedUnits, total: totalUnits });
+            onAiUsageEvent({ success: true, model: data.model });
+            const pageResult = data.data;
+            apiResult = apiResult || {};
+            apiResult.drawingTitle ||= pageResult.drawingTitle;
+            apiResult.drawingNumber ||= pageResult.drawingNumber;
+            apiResult.scale ||= pageResult.scale;
+            apiResult.rawOcrText = [apiResult.rawOcrText, pageResult.rawOcrText ? `[Page ${pageIndex + 1}]\n${pageResult.rawOcrText}` : ''].filter(Boolean).join('\n');
+            // designItems is the canonical NVIDIA/Gemini structured review
+            // collection. It must be aggregated before markup construction;
+            // otherwise the workspace falls back to raw Vision markups.
+            for (const key of ['ocrBlocks', 'visualFindings', 'markups', 'designItems', 'designErrors', 'safetyItems', 'veItems', 'ruleScreening', 'ragContext', 'localRuleContext']) {
+              const pageItems = (pageResult[key] || []).map((item: any, itemIndex: number) => ({
+                ...item,
+                pageNumber: item.pageNumber || pageIndex + 1,
+                ...(key === 'markups' ? { id: `${item.id || `markup-${itemIndex + 1}`}-p${pageIndex + 1}-${itemIndex + 1}` } : {}),
+              }));
+              apiResult[key] = [...(apiResult[key] || []), ...pageItems];
+            }
+            apiResult.reviewSummary = pageResult.reviewSummary || apiResult.reviewSummary;
+            if (pageResult.reviewNarrative) {
+              apiResult.reviewNarrative = {
+                ...(apiResult.reviewNarrative || {}),
+                drawingOverview: apiResult.reviewNarrative?.drawingOverview || pageResult.reviewNarrative.drawingOverview,
+                checklistReview: [...(apiResult.reviewNarrative?.checklistReview || []), ...(pageResult.reviewNarrative.checklistReview || [])],
+                preConstructionChecks: [...(apiResult.reviewNarrative?.preConstructionChecks || []), ...(pageResult.reviewNarrative.preConstructionChecks || [])],
+                postConstructionChecks: [...(apiResult.reviewNarrative?.postConstructionChecks || []), ...(pageResult.reviewNarrative.postConstructionChecks || [])],
+                interfaceAndScopeChecks: [...(apiResult.reviewNarrative?.interfaceAndScopeChecks || []), ...(pageResult.reviewNarrative.interfaceAndScopeChecks || [])],
+                siteAndConstructionNotes: [...(apiResult.reviewNarrative?.siteAndConstructionNotes || []), ...(pageResult.reviewNarrative.siteAndConstructionNotes || [])],
+                overallOpinion: pageResult.reviewNarrative.overallOpinion || apiResult.reviewNarrative?.overallOpinion,
+                requiredDocuments: [...(apiResult.reviewNarrative?.requiredDocuments || []), ...(pageResult.reviewNarrative.requiredDocuments || [])],
+              };
+            }
+            apiResult.calculationInputs = { ...(apiResult.calculationInputs || {}), ...(pageResult.calculationInputs || {}) };
+            apiResult.engineeringCalculations = pageResult.engineeringCalculations || apiResult.engineeringCalculations;
+          } else {
+            onAiUsageEvent({ success: false, rateLimited: response.status === 429 });
+            throw new Error(data.error || 'AI visual drawing review failed');
           }
         } catch (err) {
+          if (!(err instanceof Error && err.name === 'AbortError')) onAiUsageEvent({ success: false });
+          pageReviewFailures += 1;
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} 검토 실패: ${err instanceof Error ? err.message.slice(0, 160) : 'AI 응답 없음'}`);
           console.error('API OCR Review call error:', err);
         }
 
-        // Generate metadata specific to this uploaded file
+        if (fileType !== 'PDF') {
+          completedUnits += 1;
+          setBatchProgress({ current: completedUnits, total: totalUnits });
+        }
+        }
+
+        if (apiResult && reviewPages.length > 1) {
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} 전체 도면 종합 분석 중...`);
+          try {
+            const synthesisResponse = await fetch('/api/gemini/synthesize-review', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileName: file.name,
+                docCategory: selectedDocCategory,
+                tradeCategory: selectedTradeCategory,
+                provider: reviewProvider,
+                model: reviewModel,
+                pageResults: {
+                  drawingTitle: apiResult.drawingTitle,
+                  drawingNumber: apiResult.drawingNumber,
+                  scale: apiResult.scale,
+                  reviewSummary: apiResult.reviewSummary,
+                  reviewNarrative: apiResult.reviewNarrative,
+                  designErrors: apiResult.designErrors,
+                  safetyItems: apiResult.safetyItems,
+                  veItems: apiResult.veItems,
+                  ruleScreening: apiResult.ruleScreening,
+                  ragContext: apiResult.ragContext,
+                  localRuleContext: apiResult.localRuleContext,
+                  markups: apiResult.markups,
+                  rawOcrText: apiResult.rawOcrText,
+                },
+              }),
+            });
+            const synthesisData = await synthesisResponse.json();
+            if (synthesisData.success && synthesisData.data) {
+              apiResult.reviewSummary = synthesisData.data.reviewSummary || apiResult.reviewSummary;
+              apiResult.reviewNarrative = synthesisData.data.reviewNarrative || apiResult.reviewNarrative;
+              apiResult.designErrors = synthesisData.data.designErrors?.length ? synthesisData.data.designErrors : apiResult.designErrors;
+              apiResult.safetyItems = synthesisData.data.safetyItems?.length ? synthesisData.data.safetyItems : apiResult.safetyItems;
+              apiResult.veItems = synthesisData.data.veItems?.length ? synthesisData.data.veItems : apiResult.veItems;
+            }
+          } catch (synthesisError) {
+            console.warn('File-level synthesis unavailable; preserving page-level review.', synthesisError);
+          }
+        }
+
+        if (!apiResult && pageReviewFailures > 0) {
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} 업로드는 완료되었지만 AI 검토 결과를 받지 못했습니다.`);
+        }
+
+        // Keep the uploaded source available even when the external vision service
+        // is unavailable. The review fields below fall back to document metadata.
+
+        // Normalize Gemini's category names to the common workspace shape.
+        // The Gemini route returns designItems, while the legacy local route
+        // returns designErrors; both must become selectable markups with law
+        // evidence in the workspace.
+        if (!(apiResult?.designErrors || []).length && (apiResult?.designItems || []).length) apiResult.designErrors = apiResult.designItems;
+
+        // Use only metadata returned from the uploaded document review.
         const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
         const drawingTitle = apiResult?.drawingTitle || `${cleanTitle} (${selectedTradeCategory} ${selectedDocCategory})`;
         const drawingNumber =
           apiResult?.drawingNumber ||
           `DWG-${selectedTradeCategory.substring(0, 2).toUpperCase()}-${Math.floor(10000 + Math.random() * 90000)}`;
         const scale = apiResult?.scale || '1 : 100';
+        const reviewNarrative = apiResult?.reviewNarrative || {
+          drawingOverview: `${drawingTitle} · ${selectedTradeCategory} ${selectedDocCategory} 검토`,
+          checklistReview: [
+            ...(apiResult?.designErrors || []).map((item: any, index: number) => ({ number: index + 1, category: '설계', topic: item.description, criteria: item.codeClause || '공종별 설계기준 확인 필요', observation: item.description, status: item.findingStatus || 'FAIL', evidence: item.evidence || item.description, legalBasis: item.legalBasis || item.codeClause || '관련 기준 확인 필요', recommendation: item.suggestedFix || '설계도서 및 상세 계산서 보완 필요' })),
+            ...(apiResult?.safetyItems || []).map((item: any, index: number) => ({ number: index + 1, category: '안전', topic: item.summary || item.title, criteria: item.codeClause || item.lawRegulation || '안전 기준 확인 필요', observation: item.details || item.description || item.summary, status: item.findingStatus || item.status || 'NEEDS_CONFIRMATION', evidence: item.evidence || item.details || item.summary, legalBasis: item.codeClause || item.lawRegulation || item.legalBasis || '관련 법규 확인 필요', recommendation: item.requiredConfirmation || item.recommendation || '현장 및 관련 서류 확인 필요' })),
+            ...(apiResult?.veItems || []).map((item: any, index: number) => ({ number: index + 1, category: '원가·VE', topic: item.description, criteria: item.calculationBasis || '원가·수량 근거 확인 필요', observation: item.subDescription, status: item.findingStatus || 'NEEDS_CONFIRMATION', evidence: item.evidence || item.location, legalBasis: '계약·내역·시방서 대조 필요', recommendation: item.calculationBasis || '수량·단가·적용 조건 확인 후 VE 검토' })),
+          ],
+          preConstructionChecks: ['최신 Revision 및 현장 기존설비 상태 확인', '시공 전 타분야 간섭 및 공급범위 확인'],
+          postConstructionChecks: ['압력·누수·성능시험 및 연동시험 확인', 'As-built 및 준공서류 반영 확인'],
+          interfaceAndScopeChecks: ['건축·기계·전기·제어·전문업체 간 공급·시공·시험 책임분계 확인'],
+          overallOpinion: apiResult?.reviewSummary?.description || '설계도서·계산서·현장조건의 추가 대조가 필요합니다.',
+        };
+        const reviewNarrativeText = reviewNarrative
+          ? [
+              reviewNarrative.drawingOverview,
+              ...(reviewNarrative.checklistReview || []).map((item: any) => `${item.number}. ${item.topic} | 기준: ${item.criteria} | 확인: ${item.observation} | 상태: ${item.status} | 근거: ${item.legalBasis} | 권고: ${item.recommendation}`),
+              ...(reviewNarrative.preConstructionChecks || []).map((item: string) => `시공 전 확인: ${item}`),
+              ...(reviewNarrative.postConstructionChecks || []).map((item: string) => `시공 후 확인: ${item}`),
+              ...(reviewNarrative.interfaceAndScopeChecks || []).map((item: string) => `타분야·역무범위 확인: ${item}`),
+              ...(reviewNarrative.siteAndConstructionNotes || []).map((note: string) => `현장·시공 확인: ${note}`),
+              `종합 검토의견: ${reviewNarrative.overallOpinion || ''}`,
+            ].filter(Boolean).join('\n\n')
+          : '';
         const rawOcrText =
           apiResult?.rawOcrText ||
           `[실제 파일 OCR 추출 - ${file.name}]\n도서구분: ${selectedDocCategory}\n공종: ${selectedTradeCategory}\n표제란: POSCO Plant Engineering & Construction\n도면번호: ${drawingNumber}\n축척: ${scale}\n${selectedTradeCategory} 전문 기술 기준 검토 완료.`;
@@ -176,7 +379,81 @@ export const UploadView: React.FC<UploadViewProps> = ({
           { id: 'b3', text: `${cleanTitle} - ${selectedTradeCategory} 공종 규격 및 기술 사양 검토`, category: '치수', confidence: 95 },
           { id: 'b4', text: `${cleanTitle} - ${selectedTradeCategory} 법규 및 안전기준 준수 여부 검토`, category: '소방/안전', confidence: 92 },
         ];
-        const markups = apiResult?.markups || [];
+        const modelMarkups = Array.isArray(apiResult?.markups) ? apiResult.markups : [];
+        const visualFindings = Array.isArray(apiResult?.visualFindings) ? apiResult.visualFindings : [];
+        // 서술형 체크리스트는 우측 분석 카드에서 보여주고, 실제 좌표가 없는 항목은
+        // 도면 위 주석으로 만들지 않는다. 임의의 중앙 좌표를 사용하면 도면과 무관한
+        // 위치에 핀이 생기고 확대·축소 시 위치가 불안정해진다.
+        const clampPercent = (value: unknown, fallback: number) => {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : fallback;
+        };
+        const categoryMarkups = [
+          ...(apiResult?.designErrors || []).map((item: any, index: number) => ({
+            id: item.id || `design-${index + 1}`,
+            title: item.title || item.description || `설계 검토 ${index + 1}`,
+            comment: item.description || item.details || item.summary || '설계 검토 의견을 확인하십시오.',
+            codeClause: item.codeClause || item.legalBasis,
+            evidence: item.evidence || item.description,
+            correctiveAction: item.suggestedFix || item.recommendation,
+            severity: item.severity || 'WARNING',
+            category: '설계',
+            pageNumber: item.pageNumber,
+            xPercent: item.xPercent,
+            yPercent: item.yPercent,
+          })),
+          ...(apiResult?.safetyItems || []).map((item: any, index: number) => ({
+            id: item.id || `safety-${index + 1}`,
+            title: item.title || item.summary || `안전 검토 ${index + 1}`,
+            comment: item.details || item.description || item.observation || item.summary || item.recommendation || '안전 검토 근거가 확인되지 않았습니다.',
+            codeClause: item.codeClause || item.lawRegulation || item.legalBasis,
+            evidence: item.evidence || item.details || item.description || item.observation || item.summary,
+            correctiveAction: item.requiredConfirmation || item.recommendation,
+            severity: item.findingStatus === 'FAIL' ? 'CRITICAL' : item.severity === '위험' ? 'CRITICAL' : 'WARNING',
+            category: '안전',
+            pageNumber: item.pageNumber,
+            xPercent: item.xPercent,
+            yPercent: item.yPercent,
+          })),
+          ...(apiResult?.veItems || []).map((item: any, index: number) => ({
+            id: item.id || `ve-${index + 1}`,
+            title: item.title || item.description || `원가·VE 검토 ${index + 1}`,
+            comment: item.subDescription || item.description || '원가 및 시공성 개선 의견을 확인하십시오.',
+            codeClause: item.calculationBasis,
+            evidence: item.evidence || item.location || item.calculationBasis,
+            correctiveAction: item.calculationBasis,
+            severity: 'INFO',
+            category: '원가·VE',
+            pageNumber: item.pageNumber,
+            xPercent: item.xPercent,
+            yPercent: item.yPercent,
+          })),
+        ];
+        // NVIDIA Vision may return short English labels in its raw markup
+        // layer. The structured Text-LLM result is the authoritative review
+        // layer for the workspace, so prefer categoryMarkups (design/safety/VE)
+        // whenever available and only use raw visual markups as a fallback.
+        const coordinateMarkups = categoryMarkups.length > 0
+          ? categoryMarkups
+          : modelMarkups.length > 0
+            ? modelMarkups
+          : visualFindings.map((finding: any, index: number) => ({
+          id: finding.id || `vf-${index + 1}`,
+          xPercent: finding.xPercent,
+          yPercent: finding.yPercent,
+          title: finding.finding || `시각 검토 항목 ${index + 1}`,
+          comment: finding.evidence || '업로드 도면에서 확인된 시각 검토 항목입니다.',
+          codeClause: finding.codeClause,
+          severity: finding.severity || 'INFO',
+        }));
+        const markups = coordinateMarkups.map((markup: any, index: number) => ({
+          ...markup,
+          id: markup.id || `markup-${index + 1}`,
+          // Keep generated annotations away from the drawing centre when the
+          // model did not return coordinates; the leader line remains legible.
+          xPercent: clampPercent(markup.xPercent, index % 2 === 0 ? 12 + (index % 3) * 6 : 88 - (index % 3) * 6),
+          yPercent: clampPercent(markup.yPercent, 14 + (index % 4) * 22),
+        }));
 
         const uniqueId = `${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -191,12 +468,15 @@ export const UploadView: React.FC<UploadViewProps> = ({
           status: '분석 완료',
           uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           fileDataUrl,
+          previewPages: fileType === 'PDF' ? reviewPages : undefined,
           drawingTitle,
           drawingNumber,
           scale,
           rawOcrText,
           ocrBlocks,
           markups,
+          reviewNarrative,
+          engineeringCalculations: apiResult?.engineeringCalculations,
         };
 
         const newReviewItem: ReviewItem = {
@@ -213,16 +493,19 @@ export const UploadView: React.FC<UploadViewProps> = ({
           updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           projectId: 'PH-2024-03',
           description:
-            apiResult?.reviewSummary?.description ||
+            reviewNarrativeText || apiResult?.reviewSummary?.description ||
             `[${selectedTradeCategory} ${selectedDocCategory} 정밀 검토] ${file.name} - 표제란(${drawingTitle}) 및 ${selectedTradeCategory} 관련 기술규정 검토 완료.`,
           cadUrl: fileDataUrl,
           fileDataUrl,
+          previewPages: fileType === 'PDF' ? reviewPages : undefined,
           drawingTitle,
           drawingNumber,
           scale,
           rawOcrText,
           ocrBlocks,
           markups,
+          reviewNarrative,
+          engineeringCalculations: apiResult?.engineeringCalculations,
           engineerNotes: `${file.name} (${selectedTradeCategory}) - 전문 기술사 보정의견 반영 필요.`,
         };
 
@@ -281,6 +564,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         const veBase = apiResult?.veItems?.[0];
         const newVeItem: VeItem = {
+          detailItems: Array.isArray(veBase?.detailItems) ? veBase.detailItems : undefined,
+          costBreakdown: veBase?.costBreakdown,
           id: veBase?.id || `ve-${uniqueId}`,
           type: veBase?.type || 'VE 제안',
           docCategory: selectedDocCategory,
@@ -297,14 +582,62 @@ export const UploadView: React.FC<UploadViewProps> = ({
           status: veBase?.status || '검토대기',
         };
 
+        const allDesignErrors = (apiResult?.designErrors || []).map((item: any, index: number) => ({ ...newDesignError, id: item.id || `${uniqueId}-err-${index}`, errorCode: item.errorCode || `${newDesignError.errorCode}-${index + 1}`, description: item.description || newDesignError.description, type: item.type || newDesignError.type, severity: item.severity || newDesignError.severity, suggestedFix: item.suggestedFix || newDesignError.suggestedFix }));
+        const allSafetyItems = (apiResult?.safetyItems || []).map((item: any, index: number) => ({ ...newSafetyItem, ...item, id: item.id || `${uniqueId}-saf-${index}`, summary: item.summary || item.title || item.description || newSafetyItem.summary, lawRegulation: item.codeClause || item.lawRegulation || item.legalBasis || newSafetyItem.lawRegulation, details: item.details || item.description || item.observation || item.summary || newSafetyItem.details, evidence: item.evidence || item.details || item.description || item.observation || newSafetyItem.evidence, requiredConfirmation: item.requiredConfirmation || item.recommendation || newSafetyItem.requiredConfirmation }));
+        const allVeItems = (apiResult?.veItems || []).map((item: any, index: number) => ({ ...newVeItem, id: item.id || `${uniqueId}-ve-${index}`, description: item.description || newVeItem.description, subDescription: item.subDescription || newVeItem.subDescription, location: item.location || newVeItem.location, impactKw: item.impactKw || newVeItem.impactKw, detailItems: item.detailItems || newVeItem.detailItems, costBreakdown: item.costBreakdown || newVeItem.costBreakdown, calculationBasis: item.calculationBasis || newVeItem.calculationBasis, evidence: item.evidence || newVeItem.evidence }));
+
         onAddUploadFile(newUploadFile, {
           reviewItem: newReviewItem,
-          designError: newDesignError,
-          safetyItem: newSafetyItem,
-          veItem: newVeItem,
+          designError: allDesignErrors[0], designErrors: allDesignErrors,
+          safetyItem: allSafetyItems[0], safetyItems: allSafetyItems,
+          veItem: allVeItems[0], veItems: allVeItems,
         });
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
+        if (sourceDataUrl) {
+          const fallbackType: UploadFile['type'] = file.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Image';
+          const fallbackId = `fallback-${Date.now()}-${i}`;
+          const fallbackTitle = file.name.replace(/\.[^/.]+$/, '');
+          onAddUploadFile({
+            id: `up-${fallbackId}`,
+            name: file.name,
+            type: fallbackType,
+            docCategory: selectedDocCategory,
+            tradeCategory: selectedTradeCategory,
+            sizeMB: parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1,
+            progress: 100,
+            status: '분석 완료',
+            uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+            fileDataUrl: sourceDataUrl,
+            drawingTitle: fallbackTitle,
+            drawingNumber: 'DWG-UPLOAD',
+            scale: '1 : 100',
+            rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
+            ocrBlocks: [],
+            markups: [],
+          }, {
+            reviewItem: {
+              id: `rev-${fallbackId}`,
+              fileName: file.name,
+              fileType: fallbackType,
+              docCategory: selectedDocCategory,
+              tradeCategory: selectedTradeCategory,
+              reviewType: '도면 검토',
+              status: '검토대기',
+              result: '원본 파일 등록 완료. AI 시각 검토 응답 대기 중입니다.',
+              updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+              projectId: 'PH-2024-03',
+              description: `${fallbackTitle} 원본 파일이 등록되었습니다.`,
+              fileDataUrl: sourceDataUrl,
+              drawingTitle: fallbackTitle,
+              drawingNumber: 'DWG-UPLOAD',
+              scale: '1 : 100',
+              rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
+              ocrBlocks: [],
+              markups: [],
+            },
+          });
+        }
       }
     }
 
@@ -386,7 +719,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                         active ? 'text-blue-100' : 'text-[#767682]'
                       }`}
                     >
-                      {cat.id === '도면' ? 'PDF (DWG제외)' : cat.id === '시방서' ? 'Spec' : 'BoQ'}
+                      {cat.id === '도면' ? 'CAD/PDF' : cat.id === '시방서' ? 'Spec' : 'BoQ'}
                     </span>
                   </div>
                 </button>
@@ -442,6 +775,13 @@ export const UploadView: React.FC<UploadViewProps> = ({
               );
             })}
           </div>
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="mb-2 flex items-center justify-between"><b className="text-xs font-extrabold text-[#123b78]">3. AI 검토 엔진 선택</b><span className="text-[10px] font-bold text-slate-500">도면 분석 전 선택</span></div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => { setReviewProvider('gemini'); setReviewModel('gemini-3.6-flash'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'gemini' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">Gemini Vision</b><span className="text-[10px]">Gemini 3.6 Flash</span></button>
+            <button type="button" onClick={() => { setReviewProvider('nvidia'); setReviewModel('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'nvidia' ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">NVIDIA NIM</b><span className="text-[10px]">Nemotron Omni Vision</span></button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -463,13 +803,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           onChange={handleFileSelect}
           className="hidden"
           multiple
-          accept={
-            selectedDocCategory === '도면'
-              ? '.pdf'
-              : selectedDocCategory === '시방서'
-              ? '.pdf,.doc,.docx,.txt'
-              : '.pdf,.xlsx,.xls,.csv'
-          }
+          accept=".dwg,.dxf,.pdf,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg,.webp"
         />
 
         <div className="w-16 h-16 rounded-2xl bg-[#dfe0ff] flex items-center justify-center text-[#000d5f] mb-4 shadow-sm">
@@ -483,17 +817,13 @@ export const UploadView: React.FC<UploadViewProps> = ({
         <h3 className="font-headline font-bold text-lg text-[#191c1e]">
           {isProcessing
             ? `[${selectedTradeCategory} / ${selectedDocCategory}] 전문가 AI 검토 진행 중...`
-            : `[${selectedTradeCategory}] 공종 [${selectedDocCategory}] ${selectedDocCategory === '도면' ? 'PDF 도면 다중 업로드 (DWG 제외)' : '파일 일괄/다중 업로드'}`}
+            : `[${selectedTradeCategory}] 공종 [${selectedDocCategory}] 파일 일괄/다중 업로드`}
         </h3>
 
         <p className="font-body text-xs text-[#454651] mt-1 max-w-lg leading-relaxed">
           {isProcessing
             ? processingStatus
-            : `현재 선택: 도서 [${selectedDocCategory}] / 공종 [${selectedTradeCategory}]. ${
-                selectedDocCategory === '도면'
-                  ? '도면은 DWG 파일 업로드가 제외되며 PDF 도면 파일만 업로드 가능합니다.'
-                  : '클릭하거나 파일(.pdf, .docx, .xlsx 등)을 한 번에 다중 선택 or 드래그하여 업로드하세요.'
-              }`}
+            : `현재 선택: 도서 [${selectedDocCategory}] / 공종 [${selectedTradeCategory}]. 클릭하거나 여러 도면/문서 파일(.png, .jpg, .dwg, .pdf, .xlsx 등)을 한 번에 다중 선택 or 드래그하여 업로드하세요.`}
         </p>
 
         {/* Batch Upload Progress Bar */}
@@ -514,7 +844,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             className="px-6 py-2.5 bg-[#000d5f] text-white text-xs font-mono font-bold rounded-xl shadow-sm hover:opacity-90 flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <FolderOpen className="w-4 h-4" />
-            [{selectedTradeCategory}] 분야 {selectedDocCategory} {selectedDocCategory === '도면' ? 'PDF 파일만' : ''} 선택 (여러 장)
+            [{selectedTradeCategory}] 분야 {selectedDocCategory} 다중 파일 선택 (여러 장)
           </button>
         </div>
       </div>
@@ -525,7 +855,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           <div className="flex items-center gap-2">
             <ScanText className="w-5 h-5 text-[#000d5f]" />
             <h4 className="font-headline font-bold text-base text-[#191c1e]">
-              업로드된 실시간 도면 및 OCR 분석 현황
+              업로드된 도면 분석 완료 현황
             </h4>
           </div>
           <span className="font-mono text-xs text-[#454651] font-bold">
@@ -540,12 +870,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
               업로드된 도면/문서가 없습니다.
             </p>
             <p className="font-body text-xs text-[#454651] max-w-md mx-auto">
-              상단의 도서 구분과 공종을 선택한 후, PDF 도면(DWG 제외) 및 문서를 선택하여 전문가 AI 검토를 시행하세요.
+              상단의 도서 구분과 공종을 선택한 후, 실시간 파일(PNG/JPG/DWG/PDF/XLSX)을 선택하여 전문가 AI 검토를 시행하세요.
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="upload-status-table w-full text-left border-collapse">
               <thead className="bg-[#e6e8ea] font-mono text-xs text-[#454651]">
                 <tr>
                   <th className="px-5 py-3.5 font-semibold whitespace-nowrap min-w-[180px]">도면 / 파일명</th>
@@ -553,9 +883,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
                   <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[80px]">공종 구분</th>
                   <th className="px-5 py-3.5 font-semibold whitespace-nowrap min-w-[160px]">추출 도면명 / 번호</th>
                   <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[70px]">축척</th>
-                  <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[100px]">OCR 분석 상태</th>
+                  <th className="px-4 py-3.5 font-semibold whitespace-nowrap text-center min-w-[100px]">분석 상태</th>
                   <th className="px-4 py-3.5 font-semibold whitespace-nowrap min-w-[120px]">업로드 일시</th>
-                  <th className="px-5 py-3.5 font-semibold text-right whitespace-nowrap min-w-[240px]">OCR / 미리보기 / 작업</th>
+                  <th className="px-5 py-3.5 font-semibold text-right whitespace-nowrap min-w-[180px]">이동 / 관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#c6c5d2] font-body text-xs text-[#191c1e]">
@@ -635,39 +965,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
                     <td className="px-4 py-4 font-mono text-xs text-[#454651] whitespace-nowrap">
                       {file.uploadedAt}
                     </td>
-                    <td className="px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
-                      <button
-                        onClick={() => onOpenPdfViewer(file.name, file.drawingNumber)}
-                        className="px-2.5 py-1.5 bg-[#000d5f] text-white hover:bg-[#1a2b88] rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                        title="PDF 도면 뷰어 구동 (마크업, 도면 분석, 정밀 검토)"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-red-300" />
-                        PDF 도면 뷰어
-                      </button>
-
-                      <button
-                        onClick={() => setPdfPreviewFile(file)}
-                        className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white border border-red-200 rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        title="PDF 문서 정밀 미리보기"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        PDF 미리보기
-                      </button>
-
-                      <button
-                        onClick={() => onOpenOcrModal(file)}
-                        className="px-2.5 py-1.5 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        title="OCR 텍스트 스캔 및 레이어 확인"
-                      >
-                        <ScanText className="w-3.5 h-3.5" />
-                        OCR 스캔
-                      </button>
-
+                    <td className="upload-actions px-5 py-4 text-right space-x-1.5 whitespace-nowrap">
                       <button
                         onClick={() => onSelectTab('dashboard')}
                         className="px-2.5 py-1.5 bg-[#000d5f] text-white rounded text-xs font-mono font-bold hover:opacity-90 inline-flex items-center gap-1 cursor-pointer"
                       >
-                        검토결과
+                        대시보드로 이동
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
 
