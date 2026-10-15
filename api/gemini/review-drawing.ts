@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
+import { GoogleAuth } from 'google-auth-library';
 // Keep the extension explicit: Vercel runs this function as native ESM.
 import { retrieveRules as retrieveLocalRules, runRuleScreening } from '../../src/data/dummyRulesDb.js';
 import constructionRulesFullDb from '../../src/data/constructionRulesDb.js';
@@ -51,12 +52,38 @@ async function synthesize(prompt: string) {
   const result = await nvidiaPost('/chat/completions', { model: models.text, messages: [{ role: 'system', content: '한국어 전문 엔지니어링 설계검토 보고서 작성자입니다. 법규코드는 원문 그대로 유지하고 모든 설명은 자연스러운 한국어로 작성하세요. JSON만 반환하세요.' }, { role: 'user', content: prompt }], temperature: 0.2, max_tokens: 6144, response_format: { type: 'json_object' }, chat_template_kwargs: { enable_thinking: false } });
   return result.choices?.[0]?.message?.content || '';
 }
-async function cloudVisionOcr(base64Data: string, mimeType: string) {
+// Opt-in so deployments without Google credentials never wait on ADC lookup.
+const visionUsesAdc = () => /^(1|true|yes)$/i.test(process.env.GOOGLE_CLOUD_VISION_USE_ADC || '');
+let visionAuth: GoogleAuth | null = null;
+async function cloudVisionRequest() {
+  const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
   const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
-  if (!apiKey) return { configured: false, text: '', blocks: [] };
-  const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(apiKey)}`, {
+  if (apiKey) return { url: `${endpoint}?key=${encodeURIComponent(apiKey)}`, headers: {} as Record<string, string> };
+  if (!visionUsesAdc()) return null;
+  // Application Default Credentials (gcloud auth application-default login,
+  // or GOOGLE_APPLICATION_CREDENTIALS). The ADC quota project is sent as
+  // x-goog-user-project, which Vision requires for user credentials.
+  visionAuth ||= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  let client: Awaited<ReturnType<GoogleAuth['getClient']>>;
+  let authHeaders: Headers;
+  try {
+    client = await visionAuth.getClient();
+    authHeaders = await client.getRequestHeaders(endpoint);
+  } catch (error: any) {
+    throw new Error(`Google Cloud Vision ADC login failed (run: gcloud auth application-default login): ${error?.message || error}`);
+  }
+  const headers: Record<string, string> = {};
+  authHeaders.forEach((value, key) => { headers[key] = value; });
+  const quotaProject = process.env.GOOGLE_CLOUD_QUOTA_PROJECT || (client as any).quotaProjectId;
+  if (quotaProject && !headers['x-goog-user-project']) headers['x-goog-user-project'] = quotaProject;
+  return { url: endpoint, headers };
+}
+async function cloudVisionOcr(base64Data: string, mimeType: string) {
+  const request = await cloudVisionRequest();
+  if (!request) return { configured: false, text: '', blocks: [] };
+  const response = await fetch(request.url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...request.headers },
     body: JSON.stringify({ requests: [{ image: { content: stripDataUrl(base64Data) }, features: [{ type: 'DOCUMENT_TEXT_DETECTION', model: 'builtin/latest' }, { type: 'TEXT_DETECTION' }], imageContext: { languageHints: ['ko', 'en'] } }] }),
   });
   if (!response.ok) throw new Error(`Google Cloud Vision ${response.status}: ${(await response.text()).slice(0, 500)}`);

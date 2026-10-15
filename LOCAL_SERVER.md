@@ -25,6 +25,24 @@
 
 다음부터는 `start-local.bat` 더블클릭만 하면 바로 켜집니다.
 
+## Google Cloud Vision OCR을 키 없이 쓰기 (gcloud 로그인)
+
+Vision API 키 대신 내 Google 계정 로그인(ADC)으로 OCR을 쓸 수 있습니다.
+
+1. 명령창에서 한 번만 실행합니다. (브라우저가 열리면 Google 계정으로 로그인)
+   ```cmd
+   gcloud auth application-default login
+   gcloud auth application-default set-quota-project 내프로젝트ID
+   ```
+2. Google Cloud 콘솔에서 그 프로젝트에 **Cloud Vision API** 가 "사용 설정"되어 있는지 확인합니다.
+3. `.env` 에 다음 한 줄을 넣고 서버를 껐다 켭니다.
+   ```
+   GOOGLE_CLOUD_VISION_USE_ADC="true"
+   ```
+
+이 방식은 내 PC에서만 동작합니다. Vercel 배포 사이트는 계속 `GOOGLE_CLOUD_VISION_API_KEY` 를 사용합니다.
+Gemini 검토 자체에는 여전히 `GEMINI_API_KEY` 가 필요합니다.
+
 ## 명령창(cmd)으로 실행하고 싶다면
 
 ```cmd
@@ -44,6 +62,8 @@ npm run dev
 | --- | --- |
 | `포트 3000번이 이미 사용 중입니다` | 이미 켜진 서버 창이 있습니다. 그 창을 닫거나 브라우저에서 `http://localhost:3000` 을 그대로 쓰세요. 다른 포트를 쓰려면 `.env` 에 `PORT=3001` 추가. |
 | 검토 시 `... is not configured` 오류 | `.env` 에 해당 키가 비어 있습니다. 키를 넣고 서버를 껐다 켜세요. |
+| `Google Cloud Vision ADC login failed` | `gcloud auth application-default login` 을 다시 실행하세요. |
+| `Google Cloud Vision 403` | 해당 프로젝트에서 Cloud Vision API 사용 설정과 결제 연결을 확인하세요. |
 | `'node' is not recognized` | Node.js 설치 후 PC를 재시작하거나 명령창을 새로 여세요. |
 | 브라우저가 자동으로 안 열림 | 직접 `http://localhost:3000` 을 주소창에 입력하세요. |
 

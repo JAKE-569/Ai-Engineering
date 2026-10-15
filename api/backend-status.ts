@@ -10,7 +10,8 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
       cloudVision: {
         provider: 'Google Cloud Vision API',
         feature: 'DOCUMENT_TEXT_DETECTION + TEXT_DETECTION',
-        configured: Boolean(process.env.GOOGLE_CLOUD_VISION_API_KEY),
+        configured: Boolean(process.env.GOOGLE_CLOUD_VISION_API_KEY) || /^(1|true|yes)$/i.test(process.env.GOOGLE_CLOUD_VISION_USE_ADC || ''),
+        auth: process.env.GOOGLE_CLOUD_VISION_API_KEY ? 'api-key' : /^(1|true|yes)$/i.test(process.env.GOOGLE_CLOUD_VISION_USE_ADC || '') ? 'adc' : 'none',
       },
       nvidia: {
         vision: process.env.NVIDIA_VISION_MODEL || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
