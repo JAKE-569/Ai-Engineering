@@ -21,6 +21,8 @@ import {
   BookOpen,
   Sliders,
   Eye,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
 interface UploadViewProps {
@@ -69,6 +71,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [pdfPreviewFile, setPdfPreviewFile] = useState<UploadFile | null>(null);
+  const [failedReviews, setFailedReviews] = useState<{ fileName: string; message: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -114,6 +117,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
     if (validFiles.length === 0) return;
 
     setIsProcessing(true);
+    setFailedReviews([]);
     setBatchProgress({ current: 0, total: validFiles.length });
 
     for (let i = 0; i < validFiles.length; i++) {
@@ -138,7 +142,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         const sizeMB = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1;
 
-        let apiResult = null;
+        let apiResult: any = null;
+        let failureMessage = '';
         try {
           const response = await fetch('/api/gemini/review-drawing', {
             method: 'POST',
@@ -151,31 +156,31 @@ export const UploadView: React.FC<UploadViewProps> = ({
               tradeCategory: selectedTradeCategory,
             }),
           });
-          const data = await response.json();
-          if (data.success && data.data) {
+          const data = await response.json().catch(() => null);
+          if (response.ok && data?.success && data.data) {
             apiResult = data.data;
+          } else {
+            failureMessage = data?.error || `서버 오류 (HTTP ${response.status})`;
           }
         } catch (err) {
           console.error('API OCR Review call error:', err);
+          failureMessage = '검토 서버에 연결할 수 없습니다.';
+        }
+
+        // Never fabricate a review: a failed analysis is reported, not filled in with placeholder findings
+        if (!apiResult) {
+          setFailedReviews((prev) => [...prev, { fileName: file.name, message: failureMessage }]);
+          continue;
         }
 
         // Generate metadata specific to this uploaded file
         const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
         const drawingTitle = apiResult?.drawingTitle || `${cleanTitle} (${selectedTradeCategory} ${selectedDocCategory})`;
-        const drawingNumber =
-          apiResult?.drawingNumber ||
-          `DWG-${selectedTradeCategory.substring(0, 2).toUpperCase()}-${Math.floor(10000 + Math.random() * 90000)}`;
-        const scale = apiResult?.scale || '1 : 100';
-        const rawOcrText =
-          apiResult?.rawOcrText ||
-          `[실제 파일 OCR 추출 - ${file.name}]\n도서구분: ${selectedDocCategory}\n공종: ${selectedTradeCategory}\n표제란: POSCO Plant Engineering & Construction\n도면번호: ${drawingNumber}\n축척: ${scale}\n${selectedTradeCategory} 전문 기술 기준 검토 완료.`;
+        const drawingNumber = apiResult?.drawingNumber || '-';
+        const scale = apiResult?.scale || '-';
+        const rawOcrText = apiResult?.rawOcrText || '';
 
-        const ocrBlocks = apiResult?.ocrBlocks || [
-          { id: 'b1', text: `도서명: ${drawingTitle}`, category: '표제란', confidence: 99 },
-          { id: 'b2', text: `공종: ${selectedTradeCategory} / 구분: ${selectedDocCategory}`, category: '표제란', confidence: 98 },
-          { id: 'b3', text: `${cleanTitle} - ${selectedTradeCategory} 공종 규격 및 기술 사양 검토`, category: '치수', confidence: 95 },
-          { id: 'b4', text: `${cleanTitle} - ${selectedTradeCategory} 법규 및 안전기준 준수 여부 검토`, category: '소방/안전', confidence: 92 },
-        ];
+        const ocrBlocks = apiResult?.ocrBlocks || [];
         const markups = apiResult?.markups || [];
 
         const uniqueId = `${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`;
@@ -227,11 +232,11 @@ export const UploadView: React.FC<UploadViewProps> = ({
         };
 
         const errorBase = apiResult?.designErrors?.[0];
-        const newDesignError: DesignErrorItem = {
+        const newDesignError: DesignErrorItem | undefined = errorBase && {
           id: errorBase?.id || `err-${uniqueId}`,
           errorCode:
             errorBase?.errorCode ||
-            `ERR-${selectedTradeCategory.substring(0, 2).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+            `ERR-${uniqueId}`,
           dwgFile: errorBase?.dwgFile || file.name,
           docCategory: selectedDocCategory,
           tradeCategory: selectedTradeCategory,
@@ -262,7 +267,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         };
 
         const safetyBase = apiResult?.safetyItems?.[0];
-        const newSafetyItem: SafetyItem = {
+        const newSafetyItem: SafetyItem | undefined = safetyBase && {
           id: safetyBase?.id || `saf-${uniqueId}`,
           fileName: safetyBase?.fileName || file.name,
           fileType: safetyBase?.fileType || fileType,
@@ -280,7 +285,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         };
 
         const veBase = apiResult?.veItems?.[0];
-        const newVeItem: VeItem = {
+        const newVeItem: VeItem | undefined = veBase && {
           id: veBase?.id || `ve-${uniqueId}`,
           type: veBase?.type || 'VE 제안',
           docCategory: selectedDocCategory,
@@ -290,7 +295,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           location: veBase?.location || 'POSCO Plant / Main Zone',
           beforeCostKw: veBase?.beforeCostKw,
           afterCostKw: veBase?.afterCostKw,
-          impactKw: veBase?.impactKw || 45000000,
+          impactKw: veBase?.impactKw || 0,
           savingsRate: veBase?.savingsRate,
           scheduleDays: veBase?.scheduleDays,
           calculationBasis: veBase?.calculationBasis,
@@ -518,6 +523,32 @@ export const UploadView: React.FC<UploadViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Failed reviews: shown instead of placeholder results */}
+      {failedReviews.length > 0 && (
+        <div role="alert" className="border border-red-300 bg-red-50 rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-headline font-bold text-sm text-red-800 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              AI 검토 실패 ({failedReviews.length}건): 검토 결과가 생성되지 않았습니다.
+            </h3>
+            <button
+              onClick={() => setFailedReviews([])}
+              className="text-red-700 hover:text-red-900 cursor-pointer"
+              aria-label="닫기"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {failedReviews.map((f, idx) => (
+              <li key={`${f.fileName}-${idx}`} className="text-xs font-body text-red-900">
+                <span className="font-bold">{f.fileName}</span>: {f.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Uploaded Documents Status Table */}
       <div className="bg-white border border-[#c6c5d2] rounded-xl overflow-hidden shadow-xs">
