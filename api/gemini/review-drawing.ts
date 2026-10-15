@@ -76,7 +76,7 @@ const parseJson = (value: string) => {
   try { return JSON.parse(clean); } catch { const a = clean.indexOf('{'); const b = clean.lastIndexOf('}'); return a >= 0 && b > a ? JSON.parse(clean.slice(a, b + 1)) : null; }
 };
 async function runGeminiReview(input: { fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
-  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured in Vercel');
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured (local: .env file, deployed: Vercel environment variables)');
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `당신은 ${input.tradeCategory} 분야의 수석 설계검토 전문가입니다. 업로드된 실제 도면 이미지와 Google Cloud Vision OCR 결과만 근거로 ${input.pageNumber}/${input.totalPages} 페이지를 검토하세요. 도면과 무관한 예시 의견을 작성하지 마세요. 확인할 수 없는 값은 확인 불가로 표시하세요. 설계오류뿐 아니라 안전, 법규, 시공 전후 확인사항, 타분야 인터페이스, 원가절감(VE)을 구분하세요. 아래 검색된 법규 조항을 검토 기준으로 사용하되, 도면에서 확인되지 않는 사항은 NEEDS_CONFIRMATION으로 표시하세요. 모든 항목에 도면 근거와 실제 적용한 법규 조항의 codeClause를 기재하고 JSON만 반환하세요. Google Cloud Vision OCR: ${input.cloudVisionText || 'OCR 결과 없음'}. 검색 법규/RAG 근거: ${JSON.stringify(input.rules || [])}. 다음 구조를 사용하세요: {"drawingTitle":"","drawingNumber":"","scale":"","rawOcrText":"","ocrBlocks":[],"visualFindings":[],"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"","reviewStatus":"심각|주의|양호"}. 각 검토항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함해야 합니다.`;
   const requestedModel = input.model || 'gemini-3.6-flash';
@@ -172,8 +172,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
   if (provider !== 'nvidia') return res.status(400).json({ error: `Unsupported review provider: ${provider}` });
-  if (!process.env.NVIDIA_API_KEY) return res.status(503).json({ error: 'NVIDIA_API_KEY is not configured in Vercel' });
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(503).json({ error: 'Supabase RAG environment is not configured in Vercel' });
+  if (!process.env.NVIDIA_API_KEY) return res.status(503).json({ error: 'NVIDIA_API_KEY is not configured (local: .env file, deployed: Vercel environment variables)' });
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(503).json({ error: 'Supabase RAG environment is not configured (local: .env file, deployed: Vercel environment variables)' });
 
   try {
     const data = stripDataUrl(base64Data);
