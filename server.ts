@@ -3,6 +3,10 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Gemini model used for drawing OCR/review. Override with the GEMINI_MODEL env var.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+const GEMINI_KEY_PLACEHOLDER = "MY_GEMINI_API_KEY";
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -11,8 +15,13 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Helper: Initialize Gemini API client securely on the server
+  const hasGeminiApiKey = () => {
+    const key = process.env.GEMINI_API_KEY?.trim();
+    return !!key && key !== GEMINI_KEY_PLACEHOLDER;
+  };
+
   const getGeminiClient = () => {
-    if (!process.env.GEMINI_API_KEY) return null;
+    if (!hasGeminiApiKey()) return null;
     return new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: {
@@ -23,14 +32,43 @@ async function startServer() {
     });
   };
 
+  // Outcome of the most recent Gemini review call, surfaced by the health check.
+  let lastGeminiCall: { ok: boolean; at: string; error?: string } | null = null;
+
   // API Endpoint: Health & Backend Status Check
-  app.get("/api/backend-status", (req, res) => {
+  // Pass ?probe=1 to verify the API key and model against the Gemini API live.
+  app.get("/api/backend-status", async (req, res) => {
+    const apiKeyConfigured = hasGeminiApiKey();
+    let probe: { ok: boolean; error?: string } | null = null;
+
+    if (req.query.probe === "1" || req.query.probe === "true") {
+      const ai = getGeminiClient();
+      if (!ai) {
+        probe = { ok: false, error: "GEMINI_API_KEY is not configured" };
+      } else {
+        try {
+          await ai.models.get({ model: GEMINI_MODEL });
+          probe = { ok: true };
+        } catch (err) {
+          probe = { ok: false, error: (err as Error)?.message || String(err) };
+        }
+      }
+    }
+
+    const geminiHealthy = apiKeyConfigured && (probe ? probe.ok : lastGeminiCall?.ok !== false);
+
     res.json({
-      status: "ok",
-      connected: true,
-      backendDatabase: "Supabase PostgreSQL (Pre-Integrated on Backend)",
-      deploymentServer: "Cloud Run / Vercel Serverless Ready",
-      aiEngine: "Gemini 3.6 Flash Vision OCR Active",
+      status: geminiHealthy ? "ok" : "degraded",
+      connected: geminiHealthy,
+      gemini: {
+        model: GEMINI_MODEL,
+        apiKeyConfigured,
+        probe,
+        lastCall: lastGeminiCall,
+      },
+      aiEngine: geminiHealthy
+        ? `${GEMINI_MODEL} Vision OCR available`
+        : "Gemini unavailable: reviews use the offline fallback engine",
       timestamp: new Date().toISOString(),
     });
   });
@@ -158,7 +196,7 @@ Return ONLY valid JSON matching this exact structure:
           }
 
           const response = await ai.models.generateContent({
-            model: "gemini-3.6-flash",
+            model: GEMINI_MODEL,
             contents: {
               parts: partsArr,
             },
@@ -170,7 +208,13 @@ Return ONLY valid JSON matching this exact structure:
           if (response.text) {
             ocrResult = JSON.parse(response.text.trim());
           }
+          lastGeminiCall = { ok: true, at: new Date().toISOString() };
         } catch (aiErr) {
+          lastGeminiCall = {
+            ok: false,
+            at: new Date().toISOString(),
+            error: (aiErr as Error)?.message || String(aiErr),
+          };
           console.warn("Gemini Vision API notice (switching seamlessly to domain engineering engine):", (aiErr as Error)?.message || aiErr);
         }
       }
