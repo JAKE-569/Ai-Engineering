@@ -34,11 +34,11 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
   const testBackendStatus = async () => {
     setIsTestingBackend(true);
     try {
-      const res = await fetch('/api/backend-status');
+      const res = await fetch('/api/backend-status?probe=1');
       const data = await res.json();
       setBackendStatusInfo(data);
     } catch (err) {
-      setBackendStatusInfo({ status: 'active', message: '백엔드 Express 서버 정상 가동 중' });
+      setBackendStatusInfo({ status: 'unreachable', message: '백엔드 서버에 연결할 수 없습니다', error: String(err) });
     } finally {
       setIsTestingBackend(false);
     }
