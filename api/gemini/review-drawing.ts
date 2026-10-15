@@ -31,10 +31,6 @@ async function nvidiaPost(path: string, body: unknown) {
       if (attempt < maxAttempts) await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
     } finally { clearTimeout(timer); }
   }
-  // Text synthesis is optional after Vision/RAG have produced evidence. Return
-  // an empty JSON-compatible response so the caller can expose partial,
-  // evidence-backed findings instead of returning a 502 with no review.
-  if (path.includes('/chat/completions')) return { choices: [{ message: { content: '' } }] };
   throw lastError || new Error('NVIDIA API request failed');
 }
 async function retrieveNvidiaRules(query: string, trade: string, limit = 8) {
@@ -206,9 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isUsefulDrawingTitle = visionTitle.length >= 8
       && !/^[-\d\s()./]+$/.test(visionTitle)
       && visionTitle !== 'UNREADABLE';
-    const fallbackDrawingTitle = /소방/i.test(`${tradeCategory} ${docCategory} ${fileName}`)
-      ? `소방 설비 도면 ${pageNumber}페이지`
-      : fileName;
+    const fallbackDrawingTitle = fileName;
     const extracted = {
       ...rawExtracted,
       drawingTitle: isUsefulDrawingTitle ? visionTitle : fallbackDrawingTitle,
@@ -219,92 +213,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const evidence = [pdfText, extracted.rawOcrText, ...extracted.ocrBlocks.map((x: any) => typeof x === 'string' ? x : x.text || JSON.stringify(x)), ...extracted.visualFindings.map((x: any) => typeof x === 'string' ? x : `${x.finding || ''} ${x.evidence || ''}`), JSON.stringify(extracted.extractedMeasurements || {}), fileName].filter(Boolean).join('\n').slice(0, 18000);
     const rules = await retrieveNvidiaRules(`${tradeCategory} ${docCategory}\n${evidence}`, tradeCategory, 8);
     const ragContext = rules.map((r: any) => ({ code: r.code, title: r.title || r.clause, text: r.content || r.text, severity: r.severity, source: r.source || { title: r.code }, retrievalScore: r.retrievalScore }));
-    const synthesis = await synthesize(`업로드 도면 ${fileName}, ${pageNumber}/${totalPages} 페이지를 검토하세요.\n\n도면에서 추출한 사실:\n${evidence}\n\n검색된 국내 법규/RAG 근거:\n${JSON.stringify(ragContext)}\n\n다음 JSON만 반환하세요: {"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"", "reviewStatus":"심각|주의|양호"}. 각 항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함하세요. 확인할 수 없는 내용은 NEEDS_CONFIRMATION으로 표시하고 도면과 무관한 예시 의견은 작성하지 마세요.`);
-    const review = parseJson(synthesis) || { designItems: [], safetyItems: [], veItems: [], findings: [], summary: synthesis, reviewStatus: '주의' };
-    // Some Korean CAD PDF text layers expose malformed character maps. When
-    // that occurs, the trade/category is still reliable upload metadata. A
-    // fire drawing with pipe diameters/head-count patterns is screened as a
-    // sprinkler drawing rather than falling back to unrelated rule titles.
-    const fireDrawing = /소방|fire/i.test(`${tradeCategory} ${docCategory} ${fileName}`);
-    const fireDrawingByTrade = `${tradeCategory} ${docCategory} ${fileName}`.includes('\uC18C\uBC29') || /fire/i.test(`${tradeCategory} ${docCategory} ${fileName}`);
-    const hasSprinklerEvidence = (fireDrawing || fireDrawingByTrade) && (
-      /스프링클러|소화배관|헤드|알람밸브|가지배관|소화설비/i.test(`${extracted.drawingTitle} ${evidence}`)
-      || /\b(?:25|32|40|50|65|80|100)\b/.test(evidence)
-      || true
-    );
-    const generatedFireReview = hasSprinklerEvidence ? {
-      designItems: [
-        { title: '스프링클러 헤드 배치 및 살수장애 확인', description: '도면의 헤드 배치가 천장·보·덕트·조명 및 스튜디오 설비와 간섭하지 않는지, 살수반경과 사각지대 여부를 확인하십시오.', evidence: '도면 제목 및 PDF 텍스트에서 스프링클러 소화배관 평면도 표기가 확인되었습니다.', codeClause: 'NFTC 103', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 18, yPercent: 20 },
-        { title: '가지배관 관경 및 헤드 수량 수리계산 대조', description: '가지배관·교차배관·주배관의 관경과 접속 헤드 수량을 변경 후 수리계산서, 말단압력 및 펌프 여유량과 대조하십시오.', evidence: '도면이 확대 스프링클러 소화배관 변경 평면도로 식별되었습니다.', codeClause: 'NFTC 103', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 78, yPercent: 22 },
-        { title: '기존·철거·신설 배관 및 접속부 범위 명확화', description: '기존 배관 존치, 철거, 신설 구간과 알람밸브·밸브실 접속부를 선종·색상·수량으로 분리 표기하여 시공 및 정산 범위를 확정하십시오.', evidence: '변경후 도면으로 식별되어 기존 설비와 신설 설비의 경계 확인이 필요합니다.', codeClause: '소방시설 설치 및 관리에 관한 법률 시행규칙', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 20, yPercent: 74 },
-      ],
-      safetyItems: [
-        { title: '전기실·발전기실 인접 구역 소화설비 적정성 확인', description: '전기실·발전기실이 포함된 경우 수계 소화설비의 누수 영향, 적정 소화약제, 전원차단 및 수신반 연동계획을 기계·전기 도면과 합동 검토하십시오.', evidence: '소방 배관 변경 도면에서 전기설비 인접 구역의 설비 간섭 확인이 필요합니다.', codeClause: 'NFPC 103 / NFPC 102', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 80, yPercent: 72 },
-      ],
-      veItems: [
-        { title: '기존 배관·헤드 선택 재사용 VE 검토', description: '압력시험·누수·부식 상태 및 수리계산을 통과하는 구간은 전면 교체 대신 선택 교체를 검토하여 재료비·노무비·천장 복구비를 절감하십시오.', evidence: '변경 도면의 기존 설비 존치 여부와 신설 범위를 확인해야 합니다.', codeClause: 'NFTC 103', severity: 'INFO', status: 'NEEDS_CONFIRMATION', pageNumber, xPercent: 50, yPercent: 88 },
-      ],
-    } : null;
-    const currentItems = [...(review.designItems || []), ...(review.safetyItems || []), ...(review.veItems || [])];
-    const onlyGenericApplicability = currentItems.length === 0 || currentItems.every((item: any) => /적용 여부 확인|법규 근거 미확인/.test(item.title || ''));
-    if (generatedFireReview && onlyGenericApplicability) {
-      review.designItems = generatedFireReview.designItems;
-      review.safetyItems = generatedFireReview.safetyItems;
-      review.veItems = generatedFireReview.veItems;
-      review.findings = [...generatedFireReview.designItems, ...generatedFireReview.safetyItems, ...generatedFireReview.veItems];
-      review.summary = '스프링클러 소화배관 변경도면으로 식별되어 배치·수리계산·기존설비 접속·전기실 인접성·선택 재사용 VE를 우선 검토합니다.';
-      review.reviewStatus = '주의';
+    // Text synthesis may fail after Vision/RAG have produced evidence. In that
+    // case only the Vision model's own findings are returned, flagged partial;
+    // nothing is invented from rules or templates.
+    let synthesis = '';
+    let synthesisError = '';
+    try {
+      synthesis = await synthesize(`업로드 도면 ${fileName}, ${pageNumber}/${totalPages} 페이지를 검토하세요.\n\n도면에서 추출한 사실:\n${evidence}\n\n검색된 국내 법규/RAG 근거:\n${JSON.stringify(ragContext)}\n\n다음 JSON만 반환하세요: {"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"", "reviewStatus":"심각|주의|양호"}. 각 항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함하세요. 확인할 수 없는 내용은 NEEDS_CONFIRMATION으로 표시하고 도면과 무관한 예시 의견은 작성하지 마세요.`);
+    } catch (error: any) {
+      synthesisError = error?.message || 'NVIDIA synthesis failed';
+      console.error('NVIDIA synthesis failed:', synthesisError);
     }
-    if (!synthesis && !(review.designItems?.length || review.safetyItems?.length || review.veItems?.length)) {
-      const fallback = (extracted.visualFindings || []).map((finding: any, index: number) => ({
+    let review = parseJson(synthesis);
+    let partial = false;
+    if (!review || typeof review !== 'object') {
+      if (extracted.visualFindings.length === 0) {
+        return res.status(502).json({ error: 'NVIDIA RAG drawing review failed', detail: synthesisError || 'NVIDIA synthesis returned no usable JSON review' });
+      }
+      const visionItems = extracted.visualFindings.map((finding: any, index: number) => ({
         title: finding.finding || `도면 확인 항목 ${index + 1}`,
         description: finding.evidence || finding.finding || '도면에서 확인된 시각 정보에 대한 추가 검토가 필요합니다.',
         evidence: finding.evidence || finding.finding || '도면상 확인 근거 미기재',
         codeClause: '법규 근거 미확인', severity: 'WARNING', status: 'NEEDS_CONFIRMATION', pageNumber,
         xPercent: finding.xPercent, yPercent: finding.yPercent,
       }));
-      review.designItems = fallback;
-      review.findings = fallback;
-      review.summary = 'NVIDIA 종합 응답 지연으로 추출 결과를 우선 표시합니다.';
-      review.reviewStatus = '주의';
+      review = { designItems: visionItems, safetyItems: [], veItems: [], findings: visionItems, summary: 'NVIDIA 종합 검토에 실패하여 Vision 추출 결과만 표시합니다. 법규 검토는 수행되지 않았습니다.', reviewStatus: '주의' };
+      partial = true;
     }
     const screenedRules = runRuleScreening(rules as any, evidence);
-    // A valid NVIDIA response can still contain an empty JSON object when the
-    // vision/text model is overloaded. Never expose that as a blank review:
-    // convert the matched RAG/rule results into explicit confirmation items.
-    const hasStructuredFindings = [review.designItems, review.safetyItems, review.veItems, review.findings]
-      .some((items) => Array.isArray(items) && items.length > 0);
-    if (!hasStructuredFindings) {
-      // Exact lexical matches become findings. Trade-scoped vector candidates
-      // may become applicability checks, but never FAIL/CRITICAL findings.
-      const ruleItems = screenedRules.filter((rule: any) => rule.matched === true).slice(0, 8);
-      // The vector retriever has already constrained candidates by trade. If
-      // lexical matching misses a Korean drawing term, keep a small set of
-      // trade-scoped RAG candidates as applicability checks rather than
-      // returning an empty review.
-      const ragCandidates = ragContext.slice(0, 5).map((rule: any) => ({
-        ...rule,
-        evidence: rule.text || rule.title || '공종 기준상 적용성 확인이 필요합니다.',
-        status: 'NEEDS_CONFIRMATION',
-      }));
-      const sourceItems = ruleItems.length > 0 ? ruleItems : (ragCandidates.length > 0 ? ragCandidates : [{ code: '법규 근거 미확인', title: '도면 관련 법규 조항 확인 필요', evidence: '공종 기준에 따른 적용 법규 확인이 필요합니다.' }]);
-      const confirmationItems = sourceItems.map((rule: any, index: number) => ({
-        title: `${rule.code || rule.codeClause || '법규'} 적용 여부 확인 ${index + 1}`,
-        description: rule.evidence || rule.text || rule.title || '도면과 법규 조항의 적용 여부를 확인해야 합니다.',
-        evidence: rule.evidence || rule.text || '도면상 세부 근거 확인 필요',
-        codeClause: rule.code || rule.codeClause || '법규 근거 미확인',
-        legalBasis: rule.code || rule.codeClause || '법규 근거 미확인',
-        severity: rule.severity || 'WARNING',
-        status: 'NEEDS_CONFIRMATION',
-        pageNumber,
-        xPercent: 12 + (index % 4) * 24,
-        yPercent: 16 + (Math.floor(index / 4) * 30),
-      }));
-      review.designItems = confirmationItems;
-      review.findings = confirmationItems;
-      review.summary = 'NVIDIA 구조화 응답이 비어 법규·Rule Engine 기반 확인항목을 우선 표시합니다.';
-      review.reviewStatus = '주의';
-    }
     const attachPageAndEvidence = (items: any[] = []) => items.map((item) => ({
       ...item,
       pageNumber: Number(item.pageNumber) || pageNumber,
@@ -316,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     review.safetyItems = attachPageAndEvidence(review.safetyItems);
     review.veItems = attachPageAndEvidence(review.veItems);
     review.findings = attachPageAndEvidence(review.findings);
-    return res.status(200).json({ success: true, provider: 'nvidia', model: models.text, data: { ...extracted, ...review, ragContext, ruleScreening: screenedRules, engine: { provider: 'nvidia', visionModel: models.vision, embeddingModel: models.embedding, textModel: models.text, rag: 'supabase-pgvector', ruleEngine: 'runRuleScreening' } } });
+    return res.status(200).json({ success: true, provider: 'nvidia', model: models.text, data: { ...extracted, ...review, partial, ...(synthesisError ? { synthesisError } : {}), ragContext, ruleScreening: screenedRules, engine: { provider: 'nvidia', visionModel: models.vision, embeddingModel: models.embedding, textModel: models.text, rag: 'supabase-pgvector', ruleEngine: 'runRuleScreening' } } });
   } catch (error: any) {
     console.error('NVIDIA RAG drawing review failed:', error?.message || error);
     return res.status(502).json({ error: 'NVIDIA RAG drawing review failed', detail: error?.message || 'unknown error' });

@@ -194,6 +194,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
         let apiResult: any = null;
         let pageReviewFailures = 0;
+        let lastPageReviewError = '';
         const reviewPageWithRetry = async (reviewDataUrl: string, pageNumber: number) => {
           if (reviewProvider === 'nvidia' && !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(reviewDataUrl)) {
             throw new Error(`NVIDIA 검토 요청 중 이미지 변환 결과가 없습니다. PDF를 페이지 이미지로 변환하지 못했습니다 (page ${pageNumber}).`);
@@ -274,6 +275,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         } catch (err) {
           if (!(err instanceof Error && err.name === 'AbortError')) onAiUsageEvent({ success: false });
           pageReviewFailures += 1;
+          lastPageReviewError = err instanceof Error ? err.message.slice(0, 300) : 'AI 응답 없음';
           setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} 검토 실패: ${err instanceof Error ? err.message.slice(0, 160) : 'AI 응답 없음'}`);
           console.error('API OCR Review call error:', err);
         }
@@ -326,8 +328,52 @@ export const UploadView: React.FC<UploadViewProps> = ({
           }
         }
 
-        if (!apiResult && pageReviewFailures > 0) {
+        if (!apiResult) {
+          // Every page failed. Register the source file as a failed review with
+          // no generated metadata, OCR or findings, so it is never mistaken for
+          // a completed AI review.
           setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} 업로드는 완료되었지만 AI 검토 결과를 받지 못했습니다.`);
+          const failedId = `failed-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`;
+          const failedTitle = file.name.replace(/\.[^/.]+$/, '');
+          const failedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+          onAddUploadFile({
+            id: `up-${failedId}`,
+            name: file.name,
+            type: fileType,
+            docCategory: selectedDocCategory,
+            tradeCategory: selectedTradeCategory,
+            sizeMB,
+            progress: 100,
+            status: '오류',
+            uploadedAt: failedAt,
+            fileDataUrl,
+            previewPages: fileType === 'PDF' ? reviewPages : undefined,
+            drawingTitle: failedTitle,
+            rawOcrText: '',
+            ocrBlocks: [],
+            markups: [],
+          }, {
+            reviewItem: {
+              id: `rev-${failedId}`,
+              fileName: file.name,
+              fileType,
+              docCategory: selectedDocCategory,
+              tradeCategory: selectedTradeCategory,
+              reviewType: '도면 검토',
+              status: '미검토',
+              result: 'AI 검토 실패: 검토 결과를 받지 못했습니다.',
+              updatedAt: failedAt,
+              projectId: 'PH-2024-03',
+              description: `${file.name} AI 검토 실패 (${pageReviewFailures}개 페이지). ${lastPageReviewError}`.trim(),
+              fileDataUrl,
+              previewPages: fileType === 'PDF' ? reviewPages : undefined,
+              drawingTitle: failedTitle,
+              rawOcrText: '',
+              ocrBlocks: [],
+              markups: [],
+            },
+          });
+          continue;
         }
 
         // Keep the uploaded source available even when the external vision service
@@ -342,10 +388,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
         // Use only metadata returned from the uploaded document review.
         const cleanTitle = file.name.replace(/\.[^/.]+$/, '');
         const drawingTitle = apiResult?.drawingTitle || `${cleanTitle} (${selectedTradeCategory} ${selectedDocCategory})`;
-        const drawingNumber =
-          apiResult?.drawingNumber ||
-          `DWG-${selectedTradeCategory.substring(0, 2).toUpperCase()}-${Math.floor(10000 + Math.random() * 90000)}`;
-        const scale = apiResult?.scale || '1 : 100';
+        const drawingNumber: string | undefined = apiResult?.drawingNumber || undefined;
+        const scale: string | undefined = apiResult?.scale || undefined;
         const reviewNarrative = apiResult?.reviewNarrative || {
           drawingOverview: `${drawingTitle} · ${selectedTradeCategory} ${selectedDocCategory} 검토`,
           checklistReview: [
@@ -369,16 +413,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
               `종합 검토의견: ${reviewNarrative.overallOpinion || ''}`,
             ].filter(Boolean).join('\n\n')
           : '';
-        const rawOcrText =
-          apiResult?.rawOcrText ||
-          `[실제 파일 OCR 추출 - ${file.name}]\n도서구분: ${selectedDocCategory}\n공종: ${selectedTradeCategory}\n표제란: POSCO Plant Engineering & Construction\n도면번호: ${drawingNumber}\n축척: ${scale}\n${selectedTradeCategory} 전문 기술 기준 검토 완료.`;
+        const rawOcrText: string = apiResult?.rawOcrText || '';
 
-        const ocrBlocks = apiResult?.ocrBlocks || [
-          { id: 'b1', text: `도서명: ${drawingTitle}`, category: '표제란', confidence: 99 },
-          { id: 'b2', text: `공종: ${selectedTradeCategory} / 구분: ${selectedDocCategory}`, category: '표제란', confidence: 98 },
-          { id: 'b3', text: `${cleanTitle} - ${selectedTradeCategory} 공종 규격 및 기술 사양 검토`, category: '치수', confidence: 95 },
-          { id: 'b4', text: `${cleanTitle} - ${selectedTradeCategory} 법규 및 안전기준 준수 여부 검토`, category: '소방/안전', confidence: 92 },
-        ];
+        const ocrBlocks = Array.isArray(apiResult?.ocrBlocks) ? apiResult.ocrBlocks : [];
         const modelMarkups = Array.isArray(apiResult?.markups) ? apiResult.markups : [];
         const visualFindings = Array.isArray(apiResult?.visualFindings) ? apiResult.visualFindings : [];
         // 서술형 체크리스트는 우측 분석 카드에서 보여주고, 실제 좌표가 없는 항목은
@@ -489,7 +526,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           status: apiResult?.reviewSummary?.status || '오류 의심',
           result:
             apiResult?.reviewSummary?.result ||
-            `[${selectedTradeCategory}/${selectedDocCategory}] AI 검토 완료 (${drawingNumber})`,
+            `[${selectedTradeCategory}/${selectedDocCategory}] AI 검토 완료 (${drawingNumber || '도면번호 확인 불가'})`,
           updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           projectId: 'PH-2024-03',
           description:
@@ -575,7 +612,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           location: veBase?.location || 'POSCO Plant / Main Zone',
           beforeCostKw: veBase?.beforeCostKw,
           afterCostKw: veBase?.afterCostKw,
-          impactKw: veBase?.impactKw || 45000000,
+          impactKw: veBase?.impactKw || 0,
           savingsRate: veBase?.savingsRate,
           scheduleDays: veBase?.scheduleDays,
           calculationBasis: veBase?.calculationBasis,
@@ -606,12 +643,10 @@ export const UploadView: React.FC<UploadViewProps> = ({
             tradeCategory: selectedTradeCategory,
             sizeMB: parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1,
             progress: 100,
-            status: '분석 완료',
+            status: '오류',
             uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
             fileDataUrl: sourceDataUrl,
             drawingTitle: fallbackTitle,
-            drawingNumber: 'DWG-UPLOAD',
-            scale: '1 : 100',
             rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
             ocrBlocks: [],
             markups: [],
@@ -630,8 +665,6 @@ export const UploadView: React.FC<UploadViewProps> = ({
               description: `${fallbackTitle} 원본 파일이 등록되었습니다.`,
               fileDataUrl: sourceDataUrl,
               drawingTitle: fallbackTitle,
-              drawingNumber: 'DWG-UPLOAD',
-              scale: '1 : 100',
               rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
               ocrBlocks: [],
               markups: [],
@@ -950,11 +983,11 @@ export const UploadView: React.FC<UploadViewProps> = ({
                         {file.drawingTitle || file.name}
                       </span>
                       <span className="text-[#454651] text-[11px]">
-                        {file.drawingNumber || 'DWG-SCAN'}
+                        {file.drawingNumber || '-'}
                       </span>
                     </td>
                     <td className="px-4 py-4 font-mono text-xs text-[#454651] text-center whitespace-nowrap">
-                      {file.scale || '1 : 100'}
+                      {file.scale || '-'}
                     </td>
                     <td className="px-4 py-4 text-center whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-xs font-bold bg-emerald-100 text-emerald-800">

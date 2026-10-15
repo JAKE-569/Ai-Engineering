@@ -1,0 +1,9 @@
+# Keep secrets, logs and local build output out of Vercel CLI uploads.
+.env
+.env.*
+!.env.example
+*.log
+dist
+build
+node_modules
+*.pptx.inspect.ndjson
