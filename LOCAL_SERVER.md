@@ -43,6 +43,26 @@ Vision API 키 대신 내 Google 계정 로그인(ADC)으로 OCR을 쓸 수 있�
 이 방식은 내 PC에서만 동작합니다. Vercel 배포 사이트는 계속 `GOOGLE_CLOUD_VISION_API_KEY` 를 사용합니다.
 Gemini 검토 자체에는 여전히 `GEMINI_API_KEY` 가 필요합니다.
 
+## 회사 PC에서 `fetch failed` 가 날 때
+
+브라우저로는 접속되는데 검토만 `fetch failed` 로 실패하면, 보통 회사 보안 장비(프록시 또는 HTTPS 검사) 때문입니다.
+
+1. 명령창에서 프로그램 폴더로 이동한 뒤 **연결 점검**을 실행합니다.
+   ```cmd
+   npm run check-network
+   ```
+   각 서비스마다 `[OK]` 또는 `[실패]` 와 원인이 표시됩니다. 검토 실패 시 서버 검은 창에도 같은 원인이 출력됩니다.
+2. 원인에 따라 `.env` 에 추가하고 서버를 껐다 켭니다.
+
+| 점검 결과에 보이는 원인 | 해결 |
+| --- | --- |
+| `SELF_SIGNED_CERT...`, `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`, `UNABLE_TO_VERIFY_LEAF_SIGNATURE` | 회사가 HTTPS를 검사하는 중입니다. 서버는 Windows 인증서 저장소를 자동으로 사용하지만, 그래도 실패하면 IT 부서에서 **회사 루트 인증서(.pem 또는 Base64 .crt)** 를 받아 `.env` 에 `EXTRA_CA_CERTS_FILE="C:\certs\company-root.pem"` 추가 |
+| `ENOTFOUND`, `ETIMEDOUT`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT` | 프록시가 필요한 네트워크이거나 방화벽 차단입니다. IT에 프록시 주소를 받아 `.env` 에 `HTTPS_PROXY="http://프록시주소:포트"` 추가 |
+| `Proxy response (403)` | 프록시가 그 주소를 막고 있습니다. IT 부서에 해당 주소 허용 요청 |
+| `Proxy response (407)` | 프록시 로그인이 필요합니다. `HTTPS_PROXY="http://아이디:비밀번호@프록시주소:포트"` 형식으로 입력하거나 IT에 문의 |
+
+Windows 인증서 저장소 자동 사용은 최신 Node.js LTS에서만 동작합니다. 점검 결과 첫 줄에 `Windows 인증서 사용: unsupported` 가 보이면 https://nodejs.org 에서 최신 LTS로 다시 설치하세요.
+
 ## 명령창(cmd)으로 실행하고 싶다면
 
 ```cmd

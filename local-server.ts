@@ -6,6 +6,11 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 
+// Trust the Windows certificate store and honour HTTPS_PROXY before any API
+// module makes a request.
+const { setupLocalNetwork } = await import('./local-network');
+const network = await setupLocalNetwork();
+
 // The API modules read process.env at import time, so load them only after
 // the .env files above have been applied.
 const { default: express } = await import('express');
@@ -71,6 +76,7 @@ const server = app.listen(PORT, () => {
   console.log('');
   console.log(`  AI Engineering 로컬 서버 실행 중: ${url}`);
   console.log(`  API: ${routes.join(', ')}`);
+  console.log(`  Windows 인증서 사용: ${network.systemCa}   프록시: ${network.proxy || '없음'}`);
   if (missingKeys.length) console.log(`  [주의] .env에 아직 없는 키: ${missingKeys.join(', ')}`);
   console.log('  종료하려면 이 창에서 Ctrl + C 를 누르세요.');
   console.log('');

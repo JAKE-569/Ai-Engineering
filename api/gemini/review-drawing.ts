@@ -5,6 +5,7 @@ import { GoogleAuth } from 'google-auth-library';
 import { retrieveRules as retrieveLocalRules, runRuleScreening } from '../../src/data/dummyRulesDb.js';
 import constructionRulesFullDb from '../../src/data/constructionRulesDb.js';
 import fullFireRulesDb from '../../src/data/fireRulesFullDb.json' with { type: 'json' };
+import { explainNetworkError } from '../../local-network.js';
 
 export const config = { api: { bodyParser: { sizeLimit: '50mb' } }, maxDuration: 300 };
 
@@ -194,8 +195,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data.engine = { provider: 'gemini', model: modelUsed, requestedModel: req.body?.model || 'gemini-3.6-flash', legalSearch: 'local-keyword-rules' };
       return res.status(200).json({ success: true, provider: 'gemini', model: modelUsed, data });
     } catch (error: any) {
-      console.error('Gemini drawing review failed:', error?.message || error);
-      return res.status(502).json({ error: 'Gemini drawing review failed', detail: error?.message || 'unknown error' });
+      const detail = explainNetworkError(error);
+      console.error('Gemini drawing review failed:', detail);
+      return res.status(502).json({ error: 'Gemini drawing review failed', detail });
     }
   }
   if (provider !== 'nvidia') return res.status(400).json({ error: `Unsupported review provider: ${provider}` });
@@ -248,7 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       synthesis = await synthesize(`업로드 도면 ${fileName}, ${pageNumber}/${totalPages} 페이지를 검토하세요.\n\n도면에서 추출한 사실:\n${evidence}\n\n검색된 국내 법규/RAG 근거:\n${JSON.stringify(ragContext)}\n\n다음 JSON만 반환하세요: {"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"", "reviewStatus":"심각|주의|양호"}. 각 항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함하세요. 확인할 수 없는 내용은 NEEDS_CONFIRMATION으로 표시하고 도면과 무관한 예시 의견은 작성하지 마세요.`);
     } catch (error: any) {
-      synthesisError = error?.message || 'NVIDIA synthesis failed';
+      synthesisError = explainNetworkError(error);
       console.error('NVIDIA synthesis failed:', synthesisError);
     }
     let review = parseJson(synthesis);
@@ -281,7 +283,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     review.findings = attachPageAndEvidence(review.findings);
     return res.status(200).json({ success: true, provider: 'nvidia', model: models.text, data: { ...extracted, ...review, partial, ...(synthesisError ? { synthesisError } : {}), ragContext, ruleScreening: screenedRules, engine: { provider: 'nvidia', visionModel: models.vision, embeddingModel: models.embedding, textModel: models.text, rag: 'supabase-pgvector', ruleEngine: 'runRuleScreening' } } });
   } catch (error: any) {
-    console.error('NVIDIA RAG drawing review failed:', error?.message || error);
-    return res.status(502).json({ error: 'NVIDIA RAG drawing review failed', detail: error?.message || 'unknown error' });
+    const detail = explainNetworkError(error);
+    console.error('NVIDIA RAG drawing review failed:', detail);
+    return res.status(502).json({ error: 'NVIDIA RAG drawing review failed', detail });
   }
 }
