@@ -811,7 +811,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
             <div className="mb-2 flex items-center justify-between"><b className="text-xs font-extrabold text-[#123b78]">3. AI 검토 엔진 선택</b><span className="text-[10px] font-bold text-slate-500">도면 분석 전 선택</span></div>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => { setReviewProvider('gemini'); setReviewModel('gemini-3.6-flash'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'gemini' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">Gemini Vision</b><span className="text-[10px]">Gemini 3.6 Flash</span></button>
+              <button type="button" onClick={() => { setReviewProvider('gemini'); setReviewModel('gemini-3.6-flash'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'gemini' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">Gemini Vision</b><span className="text-[10px]">고성능 모델 우선 (한도 초과 시 자동 전환)</span></button>
             <button type="button" onClick={() => { setReviewProvider('nvidia'); setReviewModel('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'nvidia' ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">NVIDIA NIM</b><span className="text-[10px]">Nemotron Omni Vision</span></button>
             </div>
           </div>

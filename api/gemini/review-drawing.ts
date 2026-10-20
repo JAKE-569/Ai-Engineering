@@ -103,18 +103,29 @@ const parseJson = (value: string) => {
   const clean = value.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   try { return JSON.parse(clean); } catch { const a = clean.indexOf('{'); const b = clean.lastIndexOf('}'); return a >= 0 && b > a ? JSON.parse(clean.slice(a, b + 1)) : null; }
 };
+// Highest capability first; each later model is tried only when the one
+// before it is out of quota (429), not offered to this key (403/404) or
+// overloaded (5xx after one retry). The model actually used is reported in
+// the result. Gemini 4 Argon and 3.1 Pro have no free tier, so free keys
+// fall through to the Flash models.
+const DEFAULT_GEMINI_MODELS = ['gemini-4-argon', 'gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+const splitModels = (value?: string) => (value || '').split(',').map((model) => model.trim()).filter(Boolean);
+function geminiModelChain(uiModel?: string) {
+  // GEMINI_MODELS replaces the whole order. GEMINI_MODEL/GEMINI_FALLBACK_MODELS
+  // are the earlier, narrower settings and still win over the default.
+  const configured = splitModels(process.env.GEMINI_MODELS);
+  if (configured.length) return [...new Set(configured)];
+  if (process.env.GEMINI_MODEL || process.env.GEMINI_FALLBACK_MODELS) {
+    return [...new Set([process.env.GEMINI_MODEL || uiModel || 'gemini-3.6-flash', ...splitModels(process.env.GEMINI_FALLBACK_MODELS)])];
+  }
+  return DEFAULT_GEMINI_MODELS;
+}
 const exhaustedModels = new Map<string, number>();
 async function runGeminiReview(input: { fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured (local: .env file, deployed: Vercel environment variables)');
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `당신은 ${input.tradeCategory} 분야의 수석 설계검토 전문가입니다. 업로드된 실제 도면 이미지와 Google Cloud Vision OCR 결과만 근거로 ${input.pageNumber}/${input.totalPages} 페이지를 검토하세요. 도면과 무관한 예시 의견을 작성하지 마세요. 확인할 수 없는 값은 확인 불가로 표시하세요. 설계오류뿐 아니라 안전, 법규, 시공 전후 확인사항, 타분야 인터페이스, 원가절감(VE)을 구분하세요. 아래 검색된 법규 조항을 검토 기준으로 사용하되, 도면에서 확인되지 않는 사항은 NEEDS_CONFIRMATION으로 표시하세요. 모든 항목에 도면 근거와 실제 적용한 법규 조항의 codeClause를 기재하고 JSON만 반환하세요. Google Cloud Vision OCR: ${input.cloudVisionText || 'OCR 결과 없음'}. 검색 법규/RAG 근거: ${JSON.stringify(input.rules || [])}. 다음 구조를 사용하세요: {"drawingTitle":"","drawingNumber":"","scale":"","rawOcrText":"","ocrBlocks":[],"visualFindings":[],"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"","reviewStatus":"심각|주의|양호"}. 각 검토항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함해야 합니다.`;
-  // GEMINI_MODEL overrides the model chosen in the UI. GEMINI_FALLBACK_MODELS
-  // (comma separated) is tried in order only when a model is out of quota
-  // (429) or unavailable (404/5xx); the model actually used is reported in
-  // the result, so a fallback is never silent.
-  const requestedModel = process.env.GEMINI_MODEL || input.model || 'gemini-3.6-flash';
-  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || '').split(',').map((m) => m.trim()).filter(Boolean);
-  const candidates = [...new Set([requestedModel, ...fallbackModels])];
+  const candidates = geminiModelChain(input.model);
   const available = candidates.filter((model) => (exhaustedModels.get(model) || 0) < Date.now());
   const modelsToTry = available.length ? available : candidates;
   let lastError: unknown;
@@ -133,15 +144,21 @@ async function runGeminiReview(input: { fileName: string; mimeType: string; base
           // Quota exhausted: skip this model for a while instead of re-spending
           // requests on it, and move to the next fallback.
           exhaustedModels.set(model, Date.now() + 10 * 60 * 1000);
-          console.warn(`Gemini model ${model} is out of quota (429); trying next model if configured.`);
+          console.warn(`Gemini model ${model} is out of quota (429); trying next model.`);
           break;
         }
         if ([500, 502, 503, 504].includes(status) && attempt === 1) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
           continue;
         }
-        if ([404, 500, 502, 503, 504].includes(status)) {
-          console.warn(`Gemini model ${model} unavailable (${status}); trying next model if configured.`);
+        if (status === 403 || status === 404) {
+          // Not offered to this key (e.g. paid-only model on a free key).
+          exhaustedModels.set(model, Date.now() + 60 * 60 * 1000);
+          console.warn(`Gemini model ${model} not available to this API key (${status}); trying next model.`);
+          break;
+        }
+        if ([500, 502, 503, 504].includes(status)) {
+          console.warn(`Gemini model ${model} unavailable (${status}); trying next model.`);
           break;
         }
         throw error;
@@ -220,9 +237,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data.cloudVision = { configured: visionOcr.configured, ocrText: visionOcr.text, blocks: visionOcr.blocks, ...(visionOcr.error ? { error: visionOcr.error } : {}) };
       data.localRuleContext = [...enrichedRules, ...screenedRules.map((rule: any) => ({ code: rule.code, title: rule.title, text: rule.evidence, severity: rule.severity, source: rule.source }))]
         .filter((rule: any, index: number, list: any[]) => list.findIndex((item) => item.code === rule.code && item.title === rule.title) === index);
-      const modelUsed = data._modelUsed || process.env.GEMINI_MODEL || req.body?.model || 'gemini-3.6-flash';
+      const modelUsed = data._modelUsed;
       delete data._modelUsed;
-      data.engine = { provider: 'gemini', model: modelUsed, requestedModel: process.env.GEMINI_MODEL || req.body?.model || 'gemini-3.6-flash', legalSearch: 'local-keyword-rules' };
+      data.engine = { provider: 'gemini', model: modelUsed, modelOrder: geminiModelChain(req.body?.model), legalSearch: 'local-keyword-rules' };
       return res.status(200).json({ success: true, provider: 'gemini', model: modelUsed, data });
     } catch (error: any) {
       const detail = explainNetworkError(error);
