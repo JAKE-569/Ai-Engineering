@@ -40,6 +40,8 @@ Vision API 키 대신 내 Google 계정 로그인(ADC)으로 OCR을 쓸 수 있�
    GOOGLE_CLOUD_VISION_USE_ADC="true"
    ```
 
+Vision에 연결하지 못하면 검토는 멈추지 않고 Gemini만으로 진행되며, 서버 검은 창에 `Google Cloud Vision OCR skipped: 원인` 이 표시됩니다.
+
 이 방식은 내 PC에서만 동작합니다. Vercel 배포 사이트는 계속 `GOOGLE_CLOUD_VISION_API_KEY` 를 사용합니다.
 Gemini 검토 자체에는 여전히 `GEMINI_API_KEY` 가 필요합니다.
 

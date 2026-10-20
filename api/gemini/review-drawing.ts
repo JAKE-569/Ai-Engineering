@@ -138,7 +138,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       // Gemini uses the local keyword rule database only. Supabase pgvector is
       // intentionally reserved for the NVIDIA pipeline.
-      const visionOcr = await cloudVisionOcr(base64Data, mimeType);
+      // Vision OCR is optional input. If it cannot be reached (e.g. a company
+      // firewall), review with Gemini alone and report why OCR was skipped.
+      let visionOcr: { configured: boolean; text: string; blocks: any[]; error?: string };
+      try {
+        visionOcr = await cloudVisionOcr(base64Data, mimeType);
+      } catch (error: any) {
+        const visionError = `Google Cloud Vision OCR skipped: ${explainNetworkError(error)}`;
+        console.error(visionError);
+        visionOcr = { configured: true, text: '', blocks: [], error: visionError };
+      }
       const initialRules = retrieveLocalRules({ trade: tradeCategory, docCategory, fileName });
       let data = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: initialRules, cloudVisionText: visionOcr.text });
       // Re-run the same local keyword search against the model's observed text.
@@ -187,7 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
       data.ruleScreening = screenedRules;
-      data.cloudVision = { configured: visionOcr.configured, ocrText: visionOcr.text, blocks: visionOcr.blocks };
+      data.cloudVision = { configured: visionOcr.configured, ocrText: visionOcr.text, blocks: visionOcr.blocks, ...(visionOcr.error ? { error: visionOcr.error } : {}) };
       data.localRuleContext = [...enrichedRules, ...screenedRules.map((rule: any) => ({ code: rule.code, title: rule.title, text: rule.evidence, severity: rule.severity, source: rule.source }))]
         .filter((rule: any, index: number, list: any[]) => list.findIndex((item) => item.code === rule.code && item.title === rule.title) === index);
       const modelUsed = data._modelUsed || req.body?.model || 'gemini-3.6-flash';
