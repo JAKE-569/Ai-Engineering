@@ -103,28 +103,49 @@ const parseJson = (value: string) => {
   const clean = value.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   try { return JSON.parse(clean); } catch { const a = clean.indexOf('{'); const b = clean.lastIndexOf('}'); return a >= 0 && b > a ? JSON.parse(clean.slice(a, b + 1)) : null; }
 };
+const exhaustedModels = new Map<string, number>();
 async function runGeminiReview(input: { fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured (local: .env file, deployed: Vercel environment variables)');
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `당신은 ${input.tradeCategory} 분야의 수석 설계검토 전문가입니다. 업로드된 실제 도면 이미지와 Google Cloud Vision OCR 결과만 근거로 ${input.pageNumber}/${input.totalPages} 페이지를 검토하세요. 도면과 무관한 예시 의견을 작성하지 마세요. 확인할 수 없는 값은 확인 불가로 표시하세요. 설계오류뿐 아니라 안전, 법규, 시공 전후 확인사항, 타분야 인터페이스, 원가절감(VE)을 구분하세요. 아래 검색된 법규 조항을 검토 기준으로 사용하되, 도면에서 확인되지 않는 사항은 NEEDS_CONFIRMATION으로 표시하세요. 모든 항목에 도면 근거와 실제 적용한 법규 조항의 codeClause를 기재하고 JSON만 반환하세요. Google Cloud Vision OCR: ${input.cloudVisionText || 'OCR 결과 없음'}. 검색 법규/RAG 근거: ${JSON.stringify(input.rules || [])}. 다음 구조를 사용하세요: {"drawingTitle":"","drawingNumber":"","scale":"","rawOcrText":"","ocrBlocks":[],"visualFindings":[],"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"","reviewStatus":"심각|주의|양호"}. 각 검토항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함해야 합니다.`;
-  const requestedModel = input.model || 'gemini-3.6-flash';
-  // Do not silently downgrade to retired/low-quality fallback models. Retry
-  // the selected Gemini model so a temporary 429/5xx does not change review
-  // quality or produce a misleading 404 from an obsolete model ID.
-  const modelsToTry = [requestedModel, requestedModel, requestedModel];
+  // GEMINI_MODEL overrides the model chosen in the UI. GEMINI_FALLBACK_MODELS
+  // (comma separated) is tried in order only when a model is out of quota
+  // (429) or unavailable (404/5xx); the model actually used is reported in
+  // the result, so a fallback is never silent.
+  const requestedModel = process.env.GEMINI_MODEL || input.model || 'gemini-3.6-flash';
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || '').split(',').map((m) => m.trim()).filter(Boolean);
+  const candidates = [...new Set([requestedModel, ...fallbackModels])];
+  const available = candidates.filter((model) => (exhaustedModels.get(model) || 0) < Date.now());
+  const modelsToTry = available.length ? available : candidates;
   let lastError: unknown;
   for (const model of modelsToTry) {
-    try {
-      const response = await ai.models.generateContent({ model, contents: { role: 'user', parts: [{ inlineData: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } }, { text: prompt }] }, config: { responseMimeType: 'application/json', temperature: 0.15 } });
-      const text = response.text?.trim() || '';
-      const data = parseJson(text);
-      if (!data) throw new Error('Gemini returned a non-JSON review response');
-      return { ...data, _modelUsed: model };
-    } catch (error: any) {
-      lastError = error;
-      const status = Number(error?.status || error?.response?.status || error?.error?.code);
-      if (![429, 500, 502, 503, 504].includes(status)) break;
-      if (model !== modelsToTry[modelsToTry.length - 1]) await new Promise((resolve) => setTimeout(resolve, 1200));
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const response = await ai.models.generateContent({ model, contents: { role: 'user', parts: [{ inlineData: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } }, { text: prompt }] }, config: { responseMimeType: 'application/json', temperature: 0.15 } });
+        const text = response.text?.trim() || '';
+        const data = parseJson(text);
+        if (!data) throw new Error('Gemini returned a non-JSON review response');
+        return { ...data, _modelUsed: model };
+      } catch (error: any) {
+        lastError = error;
+        const status = Number(error?.status || error?.response?.status || error?.error?.code);
+        if (status === 429) {
+          // Quota exhausted: skip this model for a while instead of re-spending
+          // requests on it, and move to the next fallback.
+          exhaustedModels.set(model, Date.now() + 10 * 60 * 1000);
+          console.warn(`Gemini model ${model} is out of quota (429); trying next model if configured.`);
+          break;
+        }
+        if ([500, 502, 503, 504].includes(status) && attempt === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          continue;
+        }
+        if ([404, 500, 502, 503, 504].includes(status)) {
+          console.warn(`Gemini model ${model} unavailable (${status}); trying next model if configured.`);
+          break;
+        }
+        throw error;
+      }
     }
   }
   throw lastError || new Error('Gemini returned no review');
@@ -199,9 +220,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data.cloudVision = { configured: visionOcr.configured, ocrText: visionOcr.text, blocks: visionOcr.blocks, ...(visionOcr.error ? { error: visionOcr.error } : {}) };
       data.localRuleContext = [...enrichedRules, ...screenedRules.map((rule: any) => ({ code: rule.code, title: rule.title, text: rule.evidence, severity: rule.severity, source: rule.source }))]
         .filter((rule: any, index: number, list: any[]) => list.findIndex((item) => item.code === rule.code && item.title === rule.title) === index);
-      const modelUsed = data._modelUsed || req.body?.model || 'gemini-3.6-flash';
+      const modelUsed = data._modelUsed || process.env.GEMINI_MODEL || req.body?.model || 'gemini-3.6-flash';
       delete data._modelUsed;
-      data.engine = { provider: 'gemini', model: modelUsed, requestedModel: req.body?.model || 'gemini-3.6-flash', legalSearch: 'local-keyword-rules' };
+      data.engine = { provider: 'gemini', model: modelUsed, requestedModel: process.env.GEMINI_MODEL || req.body?.model || 'gemini-3.6-flash', legalSearch: 'local-keyword-rules' };
       return res.status(200).json({ success: true, provider: 'gemini', model: modelUsed, data });
     } catch (error: any) {
       const detail = explainNetworkError(error);

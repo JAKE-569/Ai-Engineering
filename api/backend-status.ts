@@ -6,7 +6,7 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
     connected: true,
     backendDatabase: process.env.SUPABASE_URL ? 'Supabase PostgreSQL + pgvector RAG' : 'Supabase not configured',
     aiEngines: {
-      gemini: { model: process.env.VERTEX_AI_MODEL || 'gemini-3.6-flash', configured: Boolean(process.env.GEMINI_API_KEY) },
+      gemini: { model: process.env.GEMINI_MODEL || 'gemini-3.6-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || '').split(',').map((m) => m.trim()).filter(Boolean), configured: Boolean(process.env.GEMINI_API_KEY) },
       cloudVision: {
         provider: 'Google Cloud Vision API',
         feature: 'DOCUMENT_TEXT_DETECTION + TEXT_DETECTION',

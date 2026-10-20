@@ -45,6 +45,21 @@ Vision에 연결하지 못하면 검토는 멈추지 않고 Gemini만으로 진�
 이 방식은 내 PC에서만 동작합니다. Vercel 배포 사이트는 계속 `GOOGLE_CLOUD_VISION_API_KEY` 를 사용합니다.
 Gemini 검토 자체에는 여전히 `GEMINI_API_KEY` 가 필요합니다.
 
+## Gemini 사용량 한도(429)를 넘었을 때
+
+무료 사용량은 **모델마다 따로**, 프로젝트 단위로 계산되고 매일 미국 태평양 시간 자정(한국 시간 오후 4시 또는 5시)에 초기화됩니다.
+`.env` 에 예비 모델을 넣으면, 한 모델이 한도를 넘거나(429) 과부하(503)일 때 다음 모델로 자동으로 넘어갑니다.
+
+```
+GEMINI_FALLBACK_MODELS="gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite"
+```
+
+- 한도를 넘은 모델은 10분 동안 건너뜁니다. 실제로 사용된 모델은 검토 결과와 서버 창에 표시됩니다.
+- `flash-lite` 모델은 빠르고 한도가 넉넉한 대신 도면 판독과 검토 품질이 낮을 수 있습니다.
+- 기본 모델 자체를 바꾸려면 `GEMINI_MODEL="gemini-3.8-flash"` 처럼 넣습니다.
+- 한 페이지 검토에 Gemini 요청이 최대 2번 쓰입니다(법규 근거를 붙인 2차 검토).
+- 한도를 근본적으로 늘리려면 Google AI Studio에서 결제 계정을 연결해야 합니다(유료 Tier 1).
+
 ## 회사 PC에서 `fetch failed` 가 날 때
 
 브라우저로는 접속되는데 검토만 `fetch failed` 로 실패하면, 보통 회사 보안 장비(프록시 또는 HTTPS 검사) 때문입니다.
