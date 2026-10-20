@@ -17,14 +17,14 @@ import {
 
 interface DesignErrorsViewProps {
   designErrors: DesignErrorItem[];
-  onOpenPdfViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
   onSelectTab?: (tab: PageTab) => void;
   searchQuery: string;
 }
 
 export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
   designErrors,
-  onOpenPdfViewer,
+  onOpenCadViewer,
   onSelectTab,
   searchQuery,
 }) => {
@@ -47,6 +47,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
   const criticalCount = designErrors.filter((e) => e.severity === 'CRITICAL' || e.type === 'Structural').length;
   const electricalCount = designErrors.filter((e) => e.type === 'Electrical').length;
   const otherCount = designErrors.filter((e) => e.type === 'Other' || e.type === 'Mechanical').length;
+  const correctionItems = designErrors.map((item, index) => ({ ...item, index: index + 1 }));
 
   const handleExportCsv = () => {
     if (designErrors.length === 0) return;
@@ -202,7 +203,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
               등록된 도면 오류가 없습니다.
             </h4>
             <p className="font-body text-xs text-[#454651] max-w-md mx-auto">
-              도면 업로드 메뉴에서 PDF 도면 파일(DWG 제외)을 업로드하면 OCR 스캔 및 설계 오류 자동 감지 결과가 여기에 표시됩니다.
+              도면 업로드 메뉴에서 실제 도면 파일(.png, .jpg, .dwg, .pdf)을 업로드하면 OCR 스캔 및 설계 오류 자동 감지 결과가 여기에 표시됩니다.
             </p>
             {onSelectTab && (
               <button
@@ -273,9 +274,9 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => onOpenPdfViewer(item.dwgFile, item.errorCode)}
+                        onClick={() => onOpenCadViewer(item.dwgFile, item.errorCode)}
                         className="p-1.5 text-[#000d5f] hover:bg-[#dfe0ff] rounded transition-all cursor-pointer"
-                        title="PDF 도면 뷰어 열기"
+                        title="CAD 도면 뷰어 열기"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -297,7 +298,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
               <h4 className="font-headline font-bold text-lg">AI 지능형 보정 리포트 준비됨</h4>
             </div>
             <p className="font-body text-xs opacity-90 leading-relaxed text-[#dfe0ff] max-w-2xl">
-              업로드된 도면 OCR 텍스트 분석에 맞춰 KDS 14 20:2021 규격을 준수하는 주철근 배치 최적화 및 구조 보정안이 자동 생성되었습니다.
+              {designErrors.length ? `${designErrors.length}건의 실제 검토항목을 기준으로 보정 리포트를 준비했습니다.` : '실제 검토 결과가 없어 보정 리포트를 생성할 수 없습니다.'}
             </p>
           </div>
 
@@ -318,7 +319,7 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
             <div className="flex justify-between items-center border-b pb-3 border-[#c6c5d2]">
               <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#000d5f]" />
-                KDS 14 20:2021 기반 AI 보정 리포트
+                실제 도면 기반 AI 보정 리포트
               </h3>
               <button
                 onClick={() => setShowAiSuggestionModal(false)}
@@ -330,13 +331,15 @@ export const DesignErrorsView: React.FC<DesignErrorsViewProps> = ({
             <div className="space-y-3 text-xs text-[#191c1e]">
               <div className="p-3 bg-[#f2f4f6] rounded border border-[#c6c5d2]">
                 <p className="font-bold text-[#000d5f] mb-1">업로드 도면 보정 제안</p>
-                <p className="text-[#454651] leading-relaxed">
-                  OCR 스캔 부재 치수에 기반하여 주철근 배근율을 3.6%로 조정하고 KDS 14 표준 피복두께 80mm를 확보하도록 수정을 권장합니다.
-                </p>
+                <div className="text-[#454651] leading-relaxed">
+                  {correctionItems.length ? <div className="space-y-2">{correctionItems.map((item) => <div key={`${item.errorCode}-${item.index}`} className="rounded border border-blue-100 bg-white p-2"><b>{item.index}. {item.errorCode}</b><p className="mt-1">{item.description}</p>{item.suggestedFix && <p className="mt-1 text-blue-800">조치: {item.suggestedFix}</p>}</div>)}</div> : '실제 업로드 도면의 검토 결과가 없습니다.'}
+                </div>
               </div>
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-900">
-                <p className="font-bold mb-0.5">예상 효과</p>
-                <p>시공성 개선, 콘크리트 충전성 25% 향상, 구조 검측 통과</p>
+                <p className="font-bold mb-0.5">검토 결과 기반 예상효과</p>
+                <ul className="list-disc space-y-1 pl-4">
+                  {designErrors.map((item, index) => <li key={`${item.errorCode}-${index}`}>{item.suggestedFix || item.description}</li>)}
+                </ul>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">

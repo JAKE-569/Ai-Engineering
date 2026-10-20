@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/gemini/review-drawing.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    }
+  }
+}

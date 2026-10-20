@@ -23,7 +23,7 @@ interface DashboardViewProps {
   reviewItems: ReviewItem[];
   uploadFiles?: UploadFile[];
   onSelectTab: (tab: PageTab) => void;
-  onOpenPdfViewer: (dwgFile: string, errorCode?: string) => void;
+  onOpenCadViewer: (dwgFile: string, errorCode?: string) => void;
   onOpenOcrModal?: (file: ReviewItem) => void;
   onUpdateReviewItem: (updated: ReviewItem) => void;
   searchQuery: string;
@@ -33,17 +33,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   reviewItems,
   uploadFiles = [],
   onSelectTab,
-  onOpenPdfViewer,
+  onOpenCadViewer,
   onOpenOcrModal,
   onUpdateReviewItem,
   searchQuery,
 }) => {
+  const compact = (value?: string, max = 180) => {
+    const text = (value || '').replace(/\s+/g, ' ').trim();
+    if (text.length <= max) return text;
+    const sentence = text.slice(0, max).replace(/[,;|].*$/, '').trim();
+    return `${sentence || text.slice(0, max).trim()}…`;
+  };
   const [selectedItemId, setSelectedItemId] = useState<string>(reviewItems[0]?.id || '');
   const selectedItem = reviewItems.find((item) => item.id === selectedItemId) || reviewItems[0];
+  const selectedSource = selectedItem ? uploadFiles.find((file) => file.name === selectedItem.fileName) : undefined;
+  const drawingDataUrl = selectedItem?.fileDataUrl || selectedItem?.cadUrl || selectedSource?.fileDataUrl;
+  const checklistItems = (selectedItem?.reviewNarrative?.checklistReview || []).map((item) => {
+    const category = String((item as any).category || '');
+    const isSafety = category.includes('안전') || category.includes('법규') || category.includes('소방') || /피난|방화|화재|소화|비상|안전/.test(`${item.topic} ${item.observation}`);
+    return { ...item, displayCategory: isSafety ? '안전' : '설계' };
+  });
+
+  const normalizedChecklist = (() => {
+    const existing = checklistItems.filter((item) => String(item.topic || item.observation || '').trim());
+    const hadBlank = (selectedItem?.reviewNarrative?.checklistReview || []).some((item) => !String(item.topic || item.observation || '').trim());
+    if (existing.length && !hadBlank) return existing;
+    return (selectedItem?.markups || []).filter((markup) => String(markup.title || markup.comment || '').trim()).map((markup, index) => ({
+      number: index + 1,
+      category: /안전|법규|소방|피난|화재/i.test(`${markup.category} ${markup.title} ${markup.comment}`) ? '안전' : '설계',
+      displayCategory: /안전|법규|소방|피난|화재/i.test(`${markup.category} ${markup.title} ${markup.comment}`) ? '안전' : '설계',
+      topic: markup.title,
+      criteria: markup.codeClause || '관련 법규·기술기준 확인',
+      observation: markup.comment,
+      status: markup.findingStatus || (markup.severity === 'CRITICAL' ? 'FAIL' : 'NEEDS_CONFIRMATION'),
+      evidence: markup.evidence || markup.comment,
+      legalBasis: markup.codeClause || '관련 법규 조항 확인 필요',
+      recommendation: markup.correctiveAction || '도면 및 계산서의 근거를 확인하세요.',
+    }));
+  })();
+  if (selectedItem?.reviewNarrative) selectedItem.reviewNarrative.checklistReview = normalizedChecklist as any;
 
   const [engineerNotes, setEngineerNotes] = useState<string>(selectedItem?.engineerNotes || '');
   const [currentStatus, setCurrentStatus] = useState<string>(selectedItem?.status || '오류 의심');
   const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   // Dynamic status counters based on actual review items
   const errorCount = reviewItems.filter((i) => i.status === '오류 의심' || i.status === '긴급 확인').length;
@@ -86,11 +119,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Safety & Law */}
         <div
           onClick={() => onSelectTab('safety')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="dashboard-overview-card bg-blue-50 border border-blue-200 p-5 rounded-xl hover:border-blue-500 transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl">gavel</span>
+              <span className="dashboard-card-icon dashboard-card-icon--safety material-symbols-outlined text-xl">gavel</span>
               법규 및 안전 검토
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
@@ -98,17 +131,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+            <div className="relative bg-red-50 p-3 rounded-lg border border-red-100">
               <p className="text-[10px] text-[#ba1a1a] font-bold font-mono">오류 의심</p>
-              <p className="text-2xl font-bold font-headline text-[#93000a]">{errorCount}</p>
+              <p className="absolute bottom-3 right-3 text-2xl font-bold font-headline text-[#93000a]">{errorCount}</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+            <div className="relative bg-amber-50 p-3 rounded-lg border border-amber-100">
               <p className="text-[10px] text-amber-600 font-bold font-mono">주의</p>
-              <p className="text-2xl font-bold font-headline text-amber-700">{warningCount}</p>
+              <p className="absolute bottom-3 right-3 text-2xl font-bold font-headline text-amber-700">{warningCount}</p>
             </div>
-            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+            <div className="relative bg-emerald-50 p-3 rounded-lg border border-emerald-100">
               <p className="text-[10px] text-emerald-600 font-bold font-mono">정상</p>
-              <p className="text-2xl font-bold font-headline text-emerald-700">{normalCount}</p>
+              <p className="absolute bottom-3 right-3 text-2xl font-bold font-headline text-emerald-700">{normalCount}</p>
             </div>
             <div className="bg-[#f2f4f6] p-3 rounded-lg border border-[#c6c5d2]">
               <p className="text-[10px] text-[#454651] font-bold font-mono">미검토</p>
@@ -120,11 +153,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Engineering Errors */}
         <div
           onClick={() => onSelectTab('errors')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="dashboard-overview-card bg-red-50 border border-red-200 p-5 rounded-xl hover:border-red-500 transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl">error_outline</span>
+              <span className="dashboard-card-icon dashboard-card-icon--error material-symbols-outlined text-xl">error_outline</span>
               설계 오류 검토
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
@@ -154,11 +187,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Cost & VE */}
         <div
           onClick={() => onSelectTab('cost_ve')}
-          className="bg-white border border-[#c6c5d2] p-5 rounded-xl hover:border-[#000d5f] transition-all cursor-pointer shadow-xs group"
+          className="dashboard-overview-card bg-emerald-50 border border-emerald-200 p-5 rounded-xl hover:border-emerald-500 transition-all cursor-pointer shadow-xs group"
         >
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-headline font-bold text-base text-[#000d5f] flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl">payments</span>
+              <span className="dashboard-card-icon dashboard-card-icon--cost material-symbols-outlined text-xl">payments</span>
               공사비 및 VE 분석
             </h3>
             <span className="font-mono text-[10px] px-2 py-0.5 bg-[#eceef0] text-[#454651] rounded font-medium">
@@ -218,7 +251,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 검토할 업로드 도면이 없습니다.
               </h3>
               <p className="font-body text-xs text-[#454651] mt-1 max-w-md mx-auto">
-                '도면 업로드' 메뉴에서 도면 이미지나 PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
+                '도면 업로드' 메뉴에서 도면 이미지나 CAD/PDF 문서를 업로드하면 OCR 기반 도면검토가 실행됩니다.
               </p>
             </div>
             <button
@@ -292,23 +325,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <td className="px-6 py-4 font-body text-sm text-[#191c1e]">{item.result}</td>
                     <td className="px-6 py-4 font-body text-xs text-[#454651]">{item.updatedAt}</td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      {onOpenOcrModal && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenOcrModal(item);
-                          }}
-                          className="px-2.5 py-1 bg-[#dfe0ff] text-[#000d5f] hover:bg-[#000d5f] hover:text-white rounded text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <ScanText className="w-3.5 h-3.5" />
-                          OCR
-                        </button>
-                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleSelectRow(item);
-                          onOpenPdfViewer(item.fileName, item.drawingNumber);
+                          onOpenCadViewer(item.fileName, 'ERR-STR-021');
                         }}
                         className="text-[#000d5f] hover:underline font-mono text-xs font-bold cursor-pointer"
                       >
@@ -325,10 +346,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Split View Panel (Lower Half) */}
       {selectedItem && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[580px]">
-          {/* Left: Original PDF / Document View */}
-          <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
-            <div className="px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
+        <div className="dashboard-review-layout relative grid min-h-[580px] grid-cols-1 gap-6">
+          {/* Left: Original CAD / Image Document View */}
+          <div className="dashboard-source-card bg-white border border-[#c6c5d2] rounded-xl flex flex-col overflow-hidden shadow-xs">
+            <div className="dashboard-source-header px-6 py-4 border-b border-[#c6c5d2] bg-[#f2f4f6] flex justify-between items-center">
               <h5 className="font-headline font-bold text-sm text-[#191c1e] flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#000d5f]" />
                 업로드 도면 원본 ({selectedItem.fileName})
@@ -337,42 +358,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {onOpenOcrModal && (
                   <button
                     onClick={() => onOpenOcrModal(selectedItem)}
-                    className="px-3 py-1 bg-[#dfe0ff] text-[#000d5f] text-xs font-mono font-bold rounded hover:bg-[#000d5f] hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+                    className="hidden px-3 py-1 bg-[#dfe0ff] text-[#000d5f] text-xs font-mono font-bold rounded hover:bg-[#000d5f] hover:text-white transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <ScanText className="w-3.5 h-3.5" />
                     OCR 레이어 스캔
                   </button>
                 )}
                 <button
-                  onClick={() => onOpenPdfViewer(selectedItem.fileName, selectedItem.drawingNumber)}
+                  onClick={() => onOpenCadViewer(selectedItem.fileName, 'ERR-STR-021')}
                   className="px-3 py-1 bg-[#000d5f] text-white text-xs font-mono font-bold rounded hover:opacity-90 transition-opacity flex items-center gap-1 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-sm">visibility</span>
-                  PDF 도면 뷰어
+                  도면 워크스페이스
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 bg-[#1A1A1A] relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
+            {selectedItem.reviewNarrative && (
+              <div className="dashboard-summary-strip grid grid-cols-1 gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-3">
+                {selectedItem.reviewNarrative.drawingOverview && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><b className="text-xs text-blue-700">도면 개요</b><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-800">{compact(selectedItem.reviewNarrative.drawingOverview, 180)}</p></div>}
+                <div className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><b className="text-xs text-slate-900">핵심 검토 항목</b><span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold text-blue-800">{selectedItem.reviewNarrative.checklistReview?.length || 0}건</span></div><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-700">설계·안전·법규 검토 결과를 확인하세요.</p></div>
+                {selectedItem.reviewNarrative.overallOpinion && <div className={`rounded-lg border p-3 ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'border-red-200 bg-red-50' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}><div className="flex items-center justify-between"><b className={`text-xs ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'text-red-700' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'text-amber-700' : 'text-emerald-700'}`}>종합 판단</b><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? 'bg-red-100 text-red-700' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{(selectedItem.markups || []).some((m) => m.severity === 'CRITICAL') ? '심각' : (selectedItem.markups || []).some((m) => m.severity === 'WARNING') ? '주의' : '양호'}</span></div><p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-800">{compact(selectedItem.reviewNarrative.overallOpinion, 180)}</p></div>}
+              </div>
+            )}
+            <div className="dashboard-drawing-stage flex-1 bg-slate-200 relative flex items-center justify-center p-3 overflow-hidden min-h-[400px]">
               <DrawingCanvasPreview
-                fileDataUrl={selectedItem.fileDataUrl}
-                cadUrl={selectedItem.cadUrl}
+                fileDataUrl={drawingDataUrl}
+                cadUrl={drawingDataUrl}
+                previewPages={selectedItem.previewPages || selectedSource?.previewPages}
                 drawingTitle={selectedItem.drawingTitle || selectedItem.fileName}
                 drawingNumber={selectedItem.drawingNumber || 'DWG-SCAN'}
-                docCategory={selectedItem.docCategory || '도면'}
-                tradeCategory={selectedItem.tradeCategory || '소방'}
                 scale={selectedItem.scale || '1 : 100'}
                 fileName={selectedItem.fileName}
-                ocrBlocks={selectedItem.ocrBlocks}
-                markups={selectedItem.markups}
                 className="w-full h-full"
                 maxHeight="460px"
               />
             </div>
           </div>
 
-          {/* Right: OCR Review Findings & Editor Panel */}
-          <div className="bg-white border border-[#c6c5d2] rounded-xl flex flex-col shadow-xs">
+          {/* Right: compact core review panel */}
+          <aside className="dashboard-core-panel flex max-h-[680px] min-h-0 w-[360px] flex-col overflow-hidden rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+            <button type="button" onClick={() => onOpenCadViewer(selectedItem.fileName, 'ERR-STR-021')} className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#000d5f] px-4 py-4 text-base font-bold text-white shadow-md transition hover:bg-blue-900"><span className="material-symbols-outlined">visibility</span>도면 워크스페이스</button>
+            <div className="mb-4 border-b border-slate-200 pb-3"><h5 className="text-base font-bold text-slate-900">핵심 검토 항목</h5><p className="mt-1 text-xs text-slate-500">도면 프레임과 분리된 검토 목록</p></div>
+            <div className="space-y-3">
+              {(selectedItem.reviewNarrative?.checklistReview || []).map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 p-3"><div className="flex items-start justify-between gap-2"><b className="text-xs leading-5 text-slate-900">{item.number}. {compact(item.topic, 110)}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '심각' : item.status === 'PASS' ? '양호' : '주의'}</span></div><p className="mt-2 text-xs leading-5 text-slate-600">{compact(item.observation, 180)}</p><p className="mt-2 text-[11px] leading-5 text-slate-500">근거: {compact(item.legalBasis, 100)}</p></div>)}
+              {!(selectedItem.reviewNarrative?.checklistReview?.length) && <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">검토 항목이 없습니다.</div>}
+            </div>
+          </aside>
+
+          {/* Hidden legacy editor panel retained for compatibility */}
+          <div className="hidden bg-white border border-[#c6c5d2] rounded-xl flex-col shadow-xs">
             <div className="px-6 py-4 border-b border-[#c6c5d2] flex justify-between items-center bg-[#f7f9fb]">
               <h5 className="font-headline font-bold text-base text-[#ba1a1a] flex items-center gap-2">
                 <AlertOctagon className="w-5 h-5 text-[#ba1a1a]" />
@@ -417,9 +452,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   AI 분석 결과
                 </h6>
                 <p className="font-body text-sm leading-relaxed text-[#191c1e] bg-[#f2f4f6] p-4 rounded-lg border-l-4 border-[#000d5f]">
-                  {selectedItem.description}
+                  <span className="block line-clamp-3">{compact(selectedItem.description, 220)}</span>
                 </p>
               </section>
+              {selectedItem.reviewNarrative && (
+                <section>
+                  <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">전문 설계 검토의견</h6>
+                  <div className="space-y-4 rounded-lg border border-blue-200 bg-slate-50 p-4 text-sm text-[#191c1e]">
+                    {selectedItem.reviewNarrative.drawingOverview && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><span className="text-[11px] font-bold text-blue-700">도면 개요</span><p className="mt-1 leading-6">{compact(selectedItem.reviewNarrative.drawingOverview, 220)}</p></div>}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between"><b className="text-sm text-slate-900">핵심 검토 항목</b><span className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-bold text-blue-800">{selectedItem.reviewNarrative.checklistReview?.length || 0}건</span></div>
+                      {selectedItem.reviewNarrative.checklistReview?.map((item) => <div key={`${item.number}-${item.topic}`} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-start justify-between gap-3"><b className="text-sm leading-5 text-slate-900">{item.number}. {compact(item.topic, 100)}</b><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'FAIL' ? 'bg-red-100 text-red-700' : item.status === 'PASS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{item.status === 'FAIL' ? '보완 필요' : item.status === 'PASS' ? '적합' : '확인 필요'}</span></div><dl className="mt-3 grid gap-2 text-xs leading-5"><div><dt className="font-bold text-slate-500">확인 내용</dt><dd className="text-slate-700">{compact(item.observation)}</dd></div><div><dt className="font-bold text-slate-500">적용 기준·근거</dt><dd className="text-slate-700">{compact(item.criteria, 120)} · {compact(item.legalBasis, 120)}</dd></div><div className="rounded bg-blue-50 p-2"><dt className="font-bold text-blue-700">권고 조치</dt><dd className="text-blue-900">{compact(item.recommendation)}</dd></div></dl></div>)}
+                    </div>
+                    {[['시공 전 확인사항', selectedItem.reviewNarrative.preConstructionChecks, 'blue'], ['시공 후 확인사항', selectedItem.reviewNarrative.postConstructionChecks, 'violet'], ['타분야·역무범위 확인', selectedItem.reviewNarrative.interfaceAndScopeChecks, 'amber']].map(([label, items, tone]) => Array.isArray(items) && items.length ? <div key={label as string}><div className="mb-2 flex items-center justify-between"><b className="text-sm text-slate-900">{label as string}</b><span className={`rounded-full px-2 py-1 text-[11px] font-bold ${tone === 'amber' ? 'bg-amber-100 text-amber-800' : tone === 'violet' ? 'bg-violet-100 text-violet-800' : 'bg-blue-100 text-blue-800'}`}>{items.length}건</span></div><div className="grid gap-2">{items.map((item: string, index: number) => <div key={`${label}-${index}`} className="rounded border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700"><span className="mr-2 font-bold text-slate-400">{index + 1}</span>{item}</div>)}</div></div> : null)}
+                    {selectedItem.reviewNarrative.overallOpinion && <div className="rounded-lg border-l-4 border-indigo-600 bg-indigo-50 p-3"><span className="text-[11px] font-bold text-indigo-700">종합 판단</span><p className="mt-1 leading-6 text-indigo-950">{selectedItem.reviewNarrative.overallOpinion}</p></div>}
+                  </div>
+                </section>
+              )}
 
               <section>
                 <h6 className="font-mono text-xs text-[#454651] uppercase tracking-wider mb-2 font-semibold">
@@ -489,6 +538,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 검토의견 저장
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {isReportOpen && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setIsReportOpen(false)}>
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-slate-200 pb-4"><div><h2 className="text-xl font-bold text-[#000d5f]">도면 검토 종합 보고서</h2><p className="mt-1 text-xs text-slate-500">{selectedItem.fileName} · {selectedItem.updatedAt}</p></div><button onClick={() => setIsReportOpen(false)} className="text-xl">×</button></div>
+            <div className="mt-5 grid grid-cols-3 gap-3 text-center text-xs"><div className="rounded bg-red-50 p-3"><b className="block text-xl text-red-700">{(selectedItem.markups || []).filter((m) => m.severity === 'CRITICAL').length}</b>설계 오류</div><div className="rounded bg-amber-50 p-3"><b className="block text-xl text-amber-700">{(selectedItem.markups || []).filter((m) => /안전|법규/i.test(`${m.category} ${m.title}`)).length}</b>안전 검토</div><div className="rounded bg-emerald-50 p-3"><b className="block text-xl text-emerald-700">{(selectedItem.markups || []).filter((m) => /원가|VE|절감/i.test(`${m.category} ${m.title}`)).length}</b>원가절감</div></div>
+            <p className="mt-5 rounded-lg bg-slate-50 p-4 text-sm leading-7">{selectedItem.result || 'AI 검토 결과가 아직 없습니다.'}</p>
+            {selectedItem.rawOcrText && <div className="mt-3 rounded-lg border border-slate-200 p-4 text-xs leading-6"><b>도면에서 추출된 근거</b><p className="mt-2 whitespace-pre-wrap text-slate-600">{selectedItem.rawOcrText}</p></div>}
+            <div className="mt-4 space-y-3">{(selectedItem.markups || []).map((markup, index) => <div key={markup.id || index} className="rounded-lg border border-slate-200 p-3"><div className="flex justify-between"><b>{markup.title}</b><span className="text-xs font-bold">{markup.severity}</span></div><p className="mt-1 text-sm text-slate-600">{markup.comment}</p>{markup.codeClause && <p className="mt-1 text-xs text-slate-500">근거: {markup.codeClause}</p>}</div>)}</div>
+            <div className="mt-5 border-t border-slate-200 pt-4 text-right"><button onClick={() => window.print()} className="rounded bg-[#000d5f] px-4 py-2 text-xs font-bold text-white">보고서 인쇄 / PDF 저장</button></div>
           </div>
         </div>
       )}

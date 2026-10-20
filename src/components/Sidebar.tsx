@@ -10,23 +10,22 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, onLogout }) => {
   return (
-    <aside className="hidden md:flex flex-col h-screen w-64 bg-[#f2f4f6] border-r border-[#c6c5d2] py-6 px-4 fixed left-0 top-0 z-50 shrink-0">
+    <aside className="hidden md:flex flex-col h-screen w-72 bg-[#f4f7fb] border-r border-[#cbd5e1] py-6 px-4 fixed left-0 top-0 z-50 shrink-0 text-slate-900">
       {/* Brand */}
       <div className="mb-8 px-2">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded bg-[#000d5f] flex items-center justify-center text-white shadow-sm">
-            <span className="material-symbols-outlined text-xl">precision_manufacturing</span>
-          </div>
-          <div>
-            <h2 className="font-headline text-lg font-black text-[#000d5f] leading-tight">POSCO AI</h2>
-            <p className="font-mono text-[10px] text-[#454651]">산업 엔지니어링 리뷰</p>
-          </div>
-        </div>
+        <img
+          src="/ai-eng-agent-title-v2.jpg?v=20260814"
+          alt="Ai ENG Agent · Engineering Review Platform"
+          width={1135}
+          height={284}
+          draggable={false}
+          className="block h-auto w-full object-contain [image-rendering:auto] [mask-image:radial-gradient(ellipse_at_center,black_52%,rgba(0,0,0,.92)_68%,transparent_100%)]"
+        />
 
         {/* CTA Button */}
         <button
           onClick={() => onSelectTab('upload')}
-          className="w-full mt-4 bg-[#000d5f] text-white py-2.5 px-3 rounded-lg font-mono text-xs font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-sm cursor-pointer"
+          className="w-full mt-4 bg-[#123b78] text-white py-3 px-3 rounded-lg font-mono text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#0d2c5c] active:scale-95 transition-all shadow-sm cursor-pointer"
         >
           <span className="material-symbols-outlined text-base">add</span>
           새 문서 검토
@@ -37,10 +36,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, onLogo
       <nav className="flex-1 space-y-1.5">
         <button
           onClick={() => onSelectTab('dashboard')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-lg text-sm font-mono font-semibold transition-all cursor-pointer ${
             activeTab === 'dashboard'
               ? 'bg-[#000d5f] text-white font-bold shadow-xs'
-              : 'text-[#454651] hover:text-[#191c1e] hover:bg-[#e6e8ea]'
+              : 'text-slate-300 hover:text-white hover:bg-[#1c2b46]'
           }`}
         >
           <span className="material-symbols-outlined text-lg">dashboard</span>
@@ -86,6 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, onLogo
 
       {/* Footer / Logout */}
       <div className="pt-4 border-t border-[#c6c5d2]">
+        <button onClick={() => onSelectTab('report')} className="mb-2 flex w-full items-center gap-3 rounded-lg px-3.5 py-3 text-sm font-bold text-[#123b78] transition-all hover:bg-blue-100"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#123b78] text-white shadow-sm"><span className="material-symbols-outlined text-lg">description</span></span><span>통합 보고서 출력</span></button>
         <button
           onClick={onLogout || (() => alert('로그아웃 되었습니다.'))}
           className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[#454651] hover:text-[#ba1a1a] hover:bg-[#ffdad6] rounded-lg text-xs font-mono transition-all cursor-pointer"
