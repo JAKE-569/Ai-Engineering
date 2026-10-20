@@ -106,9 +106,9 @@ const parseJson = (value: string) => {
 // Highest capability first; each later model is tried only when the one
 // before it is out of quota (429), not offered to this key (403/404) or
 // overloaded (5xx after one retry). The model actually used is reported in
-// the result. Gemini 4 Argon and 3.1 Pro have no free tier, so free keys
-// fall through to the Flash models.
-const DEFAULT_GEMINI_MODELS = ['gemini-4-argon', 'gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+// the result. Only models with a Gemini API free tier are listed; paid-only
+// models (Gemini 4 Argon, 3.1 Pro) can be added through GEMINI_MODELS.
+const DEFAULT_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
 const splitModels = (value?: string) => (value || '').split(',').map((model) => model.trim()).filter(Boolean);
 function geminiModelChain(uiModel?: string) {
   // GEMINI_MODELS replaces the whole order. GEMINI_MODEL/GEMINI_FALLBACK_MODELS

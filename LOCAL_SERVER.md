@@ -49,15 +49,14 @@ Gemini 검토 자체에는 여전히 `GEMINI_API_KEY` 가 필요합니다.
 
 별도 설정이 없으면 **고성능 모델부터** 차례로 시도하고, 안 되면 다음 모델로 자동으로 넘어갑니다.
 
-1. `gemini-4-argon` (최고 성능, 유료 전용)
-2. `gemini-3.1-pro-preview` (유료 전용)
-3. `gemini-3.8-flash`
-4. `gemini-3.6-flash`
-5. `gemini-3.5-flash-lite`
-6. `gemini-3.1-flash-lite` (가장 가벼움)
+1. `gemini-3.8-flash` (가장 고성능)
+2. `gemini-3.6-flash`
+3. `gemini-3.5-flash-lite`
+4. `gemini-3.1-flash-lite` (가장 가벼움)
 
 - 한도 초과(429)나 사용 불가(403/404)인 모델은 일정 시간 건너뛰고, 과부하(503)는 한 번 더 시도한 뒤 넘어갑니다.
-- 무료 API 키라면 1, 2번은 쓸 수 없어서 바로 3번부터 검토됩니다. 실제로 사용된 모델은 검토 결과와 서버 창에 표시됩니다.
+- 모두 무료 API 키로 쓸 수 있는 모델입니다. 실제로 사용된 모델은 검토 결과와 서버 창에 표시됩니다.
+- 유료 전용 모델(`gemini-4-argon`, `gemini-3.1-pro-preview`)은 결제 계정을 연결한 뒤 `GEMINI_MODELS` 에 직접 넣으면 쓸 수 있습니다.
 - 무료 사용량은 **모델마다 따로** 계산되고 매일 한국 시간 오후 4~5시에 초기화됩니다.
 - 순서를 직접 정하려면 `.env` 에 `GEMINI_MODELS="gemini-3.8-flash,gemini-3.6-flash"` 처럼 넣습니다.
 - 한 페이지 검토에 Gemini 요청이 최대 2번 쓰입니다(법규 근거를 붙인 2차 검토).
