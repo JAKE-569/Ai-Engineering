@@ -216,7 +216,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
               if (response.ok) return response;
               const detail = await response.text();
               lastError = new Error(`page ${pageNumber} review failed (${response.status}): ${detail.slice(0, 180)}`);
-              if (response.status !== 429 && response.status < 500) break;
+              // All Gemini models are out of quota: retrying cannot help.
+              if ((response.status !== 429 && response.status < 500) || detail.includes('Gemini quota exhausted')) break;
             } catch (error) {
               window.clearTimeout(timeoutId);
               lastError = error;

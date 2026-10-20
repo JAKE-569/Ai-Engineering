@@ -137,17 +137,38 @@ function geminiModelChain(uiModel?: string) {
   }
   return DEFAULT_GEMINI_MODELS;
 }
+// model -> time (ms) until which it is skipped. Shared by every page request
+// the server handles, so a model that hit its daily limit is not retried on
+// each page.
 const exhaustedModels = new Map<string, number>();
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function runGeminiReview(input: { fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured (local: .env file, deployed: Vercel environment variables)');
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `당신은 ${input.tradeCategory} 분야의 수석 설계검토 전문가입니다. 업로드된 실제 도면 이미지와 Google Cloud Vision OCR 결과만 근거로 ${input.pageNumber}/${input.totalPages} 페이지를 검토하세요. 도면과 무관한 예시 의견을 작성하지 마세요. 확인할 수 없는 값은 확인 불가로 표시하세요. 설계오류뿐 아니라 안전, 법규, 시공 전후 확인사항, 타분야 인터페이스, 원가절감(VE)을 구분하세요. 아래 검색된 법규 조항을 검토 기준으로 사용하되, 도면에서 확인되지 않는 사항은 NEEDS_CONFIRMATION으로 표시하세요. 모든 항목에 도면 근거와 실제 적용한 법규 조항의 codeClause를 기재하고 JSON만 반환하세요. Google Cloud Vision OCR: ${input.cloudVisionText || 'OCR 결과 없음'}. 검색 법규/RAG 근거: ${JSON.stringify(input.rules || [])}. 다음 구조를 사용하세요: {"drawingTitle":"","drawingNumber":"","scale":"","rawOcrText":"","ocrBlocks":[],"visualFindings":[],"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"","reviewStatus":"심각|주의|양호"}. 각 검토항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함해야 합니다.`;
   const candidates = geminiModelChain(input.model);
-  const available = candidates.filter((model) => (exhaustedModels.get(model) || 0) < Date.now());
-  const modelsToTry = available.length ? available : candidates;
   const timeout = Number(process.env.GEMINI_TIMEOUT_MS || 120000);
+  // When every model is parked, wait for the one that frees up first if that
+  // is soon (per-minute limits, brief overloads); otherwise fail right away
+  // instead of re-sending requests that will be refused.
+  const maxWaitMs = Number(process.env.GEMINI_MAX_WAIT_MS || 90000);
   let lastError: unknown;
-  for (const model of modelsToTry) {
+  for (let attempt = 0; attempt < candidates.length * 3; attempt += 1) {
+    const now = Date.now();
+    let model = candidates.find((name) => (exhaustedModels.get(name) || 0) <= now);
+    if (!model) {
+      const soonest = candidates.reduce((best, name) => (exhaustedModels.get(name)! < exhaustedModels.get(best)! ? name : best));
+      const waitMs = exhaustedModels.get(soonest)! - now;
+      if (waitMs > maxWaitMs) {
+        const error: any = new Error(`All Gemini models are out of quota or unavailable (${candidates.join(', ')}). The free daily limit resets at midnight Pacific time (16:00-17:00 KST); a paid plan removes it. Next model available in ${waitMs < 120000 ? `${Math.ceil(waitMs / 1000)}s` : `${Math.ceil(waitMs / 60000)} min`}.`);
+        error.status = 429;
+        error.allModelsExhausted = true;
+        throw error;
+      }
+      console.warn(`All Gemini models are busy; waiting ${Math.ceil(waitMs / 1000)}s for ${soonest} (page ${input.pageNumber}).`);
+      await sleep(waitMs);
+      model = soonest;
+    }
     try {
       const response = await ai.models.generateContent({ model, contents: { role: 'user', parts: [{ inlineData: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } }, { text: prompt }] }, config: { responseMimeType: 'application/json', temperature: 0.15, httpOptions: { timeout } } });
       const text = response.text?.trim() || '';
@@ -164,9 +185,9 @@ async function runGeminiReview(input: { fileName: string; mimeType: string; base
         const text = String(error?.message || '');
         const retrySeconds = Number(text.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/)?.[1] || 0);
         const perDay = /PerDay/i.test(text);
-        const cooldownMs = perDay ? 60 * 60 * 1000 : Math.max(retrySeconds * 1000, 60 * 1000);
+        const cooldownMs = perDay ? 60 * 60 * 1000 : Math.max(retrySeconds * 1000 + 1000, 10 * 1000);
         exhaustedModels.set(model, Date.now() + cooldownMs);
-        console.warn(`Gemini model ${model} is out of quota (429${perDay ? ', daily limit' : ''}); skipping it for ${Math.round(cooldownMs / 60000)} min.`);
+        console.warn(`Gemini model ${model} is out of quota (429${perDay ? ', daily limit' : ', per-minute limit'}); skipping it for ${perDay ? '60 min' : `${Math.round(cooldownMs / 1000)}s`}.`);
         continue;
       }
       if (status === 403 || status === 404) {
@@ -175,8 +196,8 @@ async function runGeminiReview(input: { fileName: string; mimeType: string; base
         continue;
       }
       if ([500, 502, 503, 504].includes(status) || timedOut) {
-        exhaustedModels.set(model, Date.now() + 3 * 60 * 1000);
-        console.warn(`Gemini model ${model} ${timedOut ? `timed out after ${Math.round(timeout / 1000)}s` : `overloaded (${status})`}; skipping it for 3 min.`);
+        exhaustedModels.set(model, Date.now() + (timedOut ? 3 * 60 * 1000 : 30 * 1000));
+        console.warn(`Gemini model ${model} ${timedOut ? `timed out after ${Math.round(timeout / 1000)}s; skipping it for 3 min` : `overloaded (${status}); skipping it for 30s`}.`);
         continue;
       }
       throw error;
@@ -233,8 +254,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // A second, evidence-grounded pass gives Gemini the actual clauses found
       // from OCR content instead of only filename-level rules.
       if (enrichedRules.length > initialRules.length) {
-        const secondPass = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: enrichedRules, cloudVisionText: visionOcr.text });
-        data = secondPass;
+        try {
+          data = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: enrichedRules, cloudVisionText: visionOcr.text });
+        } catch (error: any) {
+          // Keep the first-pass review rather than discarding a page that
+          // already succeeded (and was already paid for).
+          console.warn(`Gemini second pass skipped for page ${pageNumber}; using the first-pass review: ${explainNetworkError(error).slice(0, 200)}`);
+        }
       }
       const ruleByText = (item: any) => {
         const text = `${item.title || ''} ${item.summary || ''} ${item.description || ''} ${item.details || ''} ${item.evidence || ''}`.toLowerCase();
@@ -262,6 +288,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (error: any) {
       const detail = explainNetworkError(error);
       console.error('Gemini drawing review failed:', detail);
+      if (error?.allModelsExhausted) return res.status(429).json({ error: 'Gemini quota exhausted', detail });
       return res.status(502).json({ error: 'Gemini drawing review failed', detail });
     }
   }
