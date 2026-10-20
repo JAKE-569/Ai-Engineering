@@ -198,6 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let visionOcr: { configured: boolean; text: string; blocks: any[]; error?: string };
       try {
         visionOcr = await cloudVisionOcr(base64Data, mimeType);
+        if (visionOcr.configured) console.log(`Google Cloud Vision OCR used: page ${pageNumber}, ${visionOcr.text.length} chars, ${visionOcr.blocks.length} text blocks`);
       } catch (error: any) {
         const visionError = `Google Cloud Vision OCR skipped: ${explainNetworkError(error)}`;
         if (!/paused after earlier failure/.test(visionError)) console.error(`${visionError.slice(0, 400)} (Vision is paused for 10 min)`);
