@@ -79,7 +79,24 @@ async function cloudVisionRequest() {
   if (quotaProject && !headers['x-goog-user-project']) headers['x-goog-user-project'] = quotaProject;
   return { url: endpoint, headers };
 }
+// After an auth/permission failure (API disabled, bad key, login expired),
+// stop calling Vision for a while so every page does not pay for it again.
+let visionPausedUntil = 0;
+let visionPauseReason = '';
 async function cloudVisionOcr(base64Data: string, mimeType: string) {
+  if (visionPausedUntil > Date.now()) throw new Error(`paused after earlier failure: ${visionPauseReason}`);
+  try {
+    return await cloudVisionOcrOnce(base64Data, mimeType);
+  } catch (error: any) {
+    const message = String(error?.message || error);
+    if (/Vision (400|401|403|404)\b|ADC login failed/.test(message)) {
+      visionPausedUntil = Date.now() + 10 * 60 * 1000;
+      visionPauseReason = message.slice(0, 160);
+    }
+    throw error;
+  }
+}
+async function cloudVisionOcrOnce(base64Data: string, mimeType: string) {
   const request = await cloudVisionRequest();
   if (!request) return { configured: false, text: '', blocks: [] };
   const response = await fetch(request.url, {
@@ -105,7 +122,7 @@ const parseJson = (value: string) => {
 };
 // Highest capability first; each later model is tried only when the one
 // before it is out of quota (429), not offered to this key (403/404) or
-// overloaded (5xx after one retry). The model actually used is reported in
+// overloaded or slow (5xx/timeout). The model actually used is reported in
 // the result. Only models with a Gemini API free tier are listed; paid-only
 // models (Gemini 4 Argon, 3.1 Pro) can be added through GEMINI_MODELS.
 const DEFAULT_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
@@ -128,41 +145,41 @@ async function runGeminiReview(input: { fileName: string; mimeType: string; base
   const candidates = geminiModelChain(input.model);
   const available = candidates.filter((model) => (exhaustedModels.get(model) || 0) < Date.now());
   const modelsToTry = available.length ? available : candidates;
+  const timeout = Number(process.env.GEMINI_TIMEOUT_MS || 120000);
   let lastError: unknown;
   for (const model of modelsToTry) {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      try {
-        const response = await ai.models.generateContent({ model, contents: { role: 'user', parts: [{ inlineData: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } }, { text: prompt }] }, config: { responseMimeType: 'application/json', temperature: 0.15 } });
-        const text = response.text?.trim() || '';
-        const data = parseJson(text);
-        if (!data) throw new Error('Gemini returned a non-JSON review response');
-        return { ...data, _modelUsed: model };
-      } catch (error: any) {
-        lastError = error;
-        const status = Number(error?.status || error?.response?.status || error?.error?.code);
-        if (status === 429) {
-          // Quota exhausted: skip this model for a while instead of re-spending
-          // requests on it, and move to the next fallback.
-          exhaustedModels.set(model, Date.now() + 10 * 60 * 1000);
-          console.warn(`Gemini model ${model} is out of quota (429); trying next model.`);
-          break;
-        }
-        if ([500, 502, 503, 504].includes(status) && attempt === 1) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          continue;
-        }
-        if (status === 403 || status === 404) {
-          // Not offered to this key (e.g. paid-only model on a free key).
-          exhaustedModels.set(model, Date.now() + 60 * 60 * 1000);
-          console.warn(`Gemini model ${model} not available to this API key (${status}); trying next model.`);
-          break;
-        }
-        if ([500, 502, 503, 504].includes(status)) {
-          console.warn(`Gemini model ${model} unavailable (${status}); trying next model.`);
-          break;
-        }
-        throw error;
+    try {
+      const response = await ai.models.generateContent({ model, contents: { role: 'user', parts: [{ inlineData: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } }, { text: prompt }] }, config: { responseMimeType: 'application/json', temperature: 0.15, httpOptions: { timeout } } });
+      const text = response.text?.trim() || '';
+      const data = parseJson(text);
+      if (!data) throw new Error('Gemini returned a non-JSON review response');
+      return { ...data, _modelUsed: model };
+    } catch (error: any) {
+      lastError = error;
+      const status = Number(error?.status || error?.response?.status || error?.error?.code);
+      const timedOut = error?.name === 'AbortError' || /aborted|timeout/i.test(String(error?.message || ''));
+      // Park a failing model so later pages go straight to one that works,
+      // instead of paying for the same failure on every page.
+      if (status === 429) {
+        const text = String(error?.message || '');
+        const retrySeconds = Number(text.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/)?.[1] || 0);
+        const perDay = /PerDay/i.test(text);
+        const cooldownMs = perDay ? 60 * 60 * 1000 : Math.max(retrySeconds * 1000, 60 * 1000);
+        exhaustedModels.set(model, Date.now() + cooldownMs);
+        console.warn(`Gemini model ${model} is out of quota (429${perDay ? ', daily limit' : ''}); skipping it for ${Math.round(cooldownMs / 60000)} min.`);
+        continue;
       }
+      if (status === 403 || status === 404) {
+        exhaustedModels.set(model, Date.now() + 60 * 60 * 1000);
+        console.warn(`Gemini model ${model} not available to this API key (${status}); skipping it for 60 min.`);
+        continue;
+      }
+      if ([500, 502, 503, 504].includes(status) || timedOut) {
+        exhaustedModels.set(model, Date.now() + 3 * 60 * 1000);
+        console.warn(`Gemini model ${model} ${timedOut ? `timed out after ${Math.round(timeout / 1000)}s` : `overloaded (${status})`}; skipping it for 3 min.`);
+        continue;
+      }
+      throw error;
     }
   }
   throw lastError || new Error('Gemini returned no review');
@@ -183,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         visionOcr = await cloudVisionOcr(base64Data, mimeType);
       } catch (error: any) {
         const visionError = `Google Cloud Vision OCR skipped: ${explainNetworkError(error)}`;
-        console.error(visionError);
+        if (!/paused after earlier failure/.test(visionError)) console.error(`${visionError.slice(0, 400)} (Vision is paused for 10 min)`);
         visionOcr = { configured: true, text: '', blocks: [], error: visionError };
       }
       const initialRules = retrieveLocalRules({ trade: tradeCategory, docCategory, fileName });
