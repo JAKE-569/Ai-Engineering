@@ -6,11 +6,12 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
     connected: true,
     backendDatabase: process.env.SUPABASE_URL ? 'Supabase PostgreSQL + pgvector RAG' : 'Supabase not configured',
     aiEngines: {
-      gemini: { model: process.env.VERTEX_AI_MODEL || 'gemini-3.6-flash', configured: Boolean(process.env.GEMINI_API_KEY) },
+      gemini: { modelOrder: process.env.GEMINI_MODELS || process.env.GEMINI_MODEL || process.env.GEMINI_FALLBACK_MODELS ? 'custom (.env)' : 'gemini-3.8-flash > gemini-3.6-flash > gemini-3.5-flash-lite > gemini-3.1-flash-lite', configured: Boolean(process.env.GEMINI_API_KEY) },
       cloudVision: {
         provider: 'Google Cloud Vision API',
         feature: 'DOCUMENT_TEXT_DETECTION + TEXT_DETECTION',
-        configured: Boolean(process.env.GOOGLE_CLOUD_VISION_API_KEY),
+        configured: Boolean(process.env.GOOGLE_CLOUD_VISION_API_KEY) || /^(1|true|yes)$/i.test(process.env.GOOGLE_CLOUD_VISION_USE_ADC || ''),
+        auth: process.env.GOOGLE_CLOUD_VISION_API_KEY ? 'api-key' : /^(1|true|yes)$/i.test(process.env.GOOGLE_CLOUD_VISION_USE_ADC || '') ? 'adc' : 'none',
       },
       nvidia: {
         vision: process.env.NVIDIA_VISION_MODEL || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
