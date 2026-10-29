@@ -16,7 +16,11 @@ export default defineConfig(() => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Stored drawings are runtime data. On Windows, directory watch handles
+      // prevent the local store from renaming document folders during deletion.
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: ['**/local-data', '**/local-data/**'],
+      },
     },
   };
 });

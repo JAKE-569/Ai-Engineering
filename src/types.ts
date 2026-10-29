@@ -1,6 +1,10 @@
-export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'deploy_guide';
+import type { OpinionConfirmation } from './lib/reportReview';
+import type { VeCostEstimate, VeCostInput } from './lib/veCost';
+import type { ReviewExecution, FindingStatus } from './lib/reviewNormalization';
+export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'report' | 'deploy_guide';
+export type ReviewProvider = 'gemini' | 'nvidia';
 
-export type DocCategory = '도면' | '시방서' | '내역서';
+export type DocCategory = '도면' | '시방서' | '내역서' | '구조계산서';
 export type TradeCategory = '토목' | '건축' | '건축기계' | '건축전기' | '소방';
 
 export interface Project {
@@ -14,14 +18,23 @@ export type ReviewStatus = '오류 의심' | '주의' | '정상' | '미검토' |
 export type SeverityLevel = 'CRITICAL' | 'WARNING' | 'INFO' | '위험' | '주의' | '정상';
 
 export interface ReviewMarkup {
+  veCost?: VeCostInput;
+  veItemId?: string;
   id: string;
-  xPercent: number; // 0~100
-  yPercent: number; // 0~100
+  pageNumber?: number;
+  xPercent?: number; // 0~100
+  yPercent?: number; // 0~100
   title: string;
   comment: string;
   codeClause?: string;
+  legalBasis?: string;
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
+  correctiveAction?: string;
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
   category?: string;
+  displayIndex?: number;
 }
 
 export interface OcrBlock {
@@ -32,13 +45,42 @@ export interface OcrBlock {
   bbox?: { x: number; y: number; width: number; height: number };
 }
 
+export interface FireCalculationResult {
+  key: string;
+  label: string;
+  status: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  calculated?: number;
+  required?: number;
+  unit: string;
+  formula: string;
+  inputs: Record<string, number>;
+  note: string;
+}
+
+export interface ReviewNarrative {
+  drawingOverview?: string;
+  checklistReview?: { number: number; topic: string; criteria: string; observation: string; status: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION'; evidence: string; legalBasis: string; recommendation: string }[];
+  preConstructionChecks?: string[];
+  postConstructionChecks?: string[];
+  interfaceAndScopeChecks?: string[];
+  siteAndConstructionNotes?: string[];
+  overallOpinion?: string;
+  requiredDocuments?: string[];
+}
+
 export interface ReviewItem {
+  opinionConfirmations?: Record<string, OpinionConfirmation>;
+  documentId?: string;
+  execution?: ReviewExecution;
+  reviewNarrative?: ReviewNarrative;
+  engineeringCalculations?: FireCalculationResult[];
+  previewPages?: string[];
   id: string;
   fileName: string;
   fileType: string;
   docCategory?: DocCategory;
   tradeCategory?: TradeCategory;
-  reviewType: '설계 오류' | '법규 및 안전' | '공사비 및 VE';
+  reviewType: '설계 오류' | '법규 및 안전' | '공사비 및 VE' | '도면 검토';
   status: ReviewStatus;
   result: string;
   updatedAt: string;
@@ -57,6 +99,8 @@ export interface ReviewItem {
 }
 
 export interface SafetyItem {
+  documentId?: string;
+  execution?: ReviewExecution;
   id: string;
   fileName: string;
   fileType: string;
@@ -68,12 +112,24 @@ export interface SafetyItem {
   severity: '위험' | '주의' | '정상';
   status: string;
   details?: string;
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
+  requiredConfirmation?: string;
   cadUrl?: string;
   fileDataUrl?: string;
   markups?: ReviewMarkup[];
 }
 
 export interface DesignErrorItem {
+  codeClause?: string;
+  evidence?: string;
+  findingStatus?: FindingStatus;
+  pageNumber?: number;
+  drawingNumber?: string;
+  documentId?: string;
+  execution?: ReviewExecution;
+  previewPages?: string[];
   id: string;
   errorCode: string;
   dwgFile: string;
@@ -93,6 +149,14 @@ export interface DesignErrorItem {
 }
 
 export interface VeItem {
+  adoption?: { accepted: boolean; fingerprint: string; updatedAt: string };
+  costBasisType?: 'llm-assumption' | 'source-data';
+  costEstimate?: VeCostEstimate;
+  pageNumber?: number;
+  documentId?: string;
+  execution?: ReviewExecution;
+  detailItems?: { label: string; category?: '재료비' | '노무비' | '경비'; quantity?: string; unitPrice?: number; amount?: number; formula?: string }[];
+  costBreakdown?: { materialCost?: number; laborCost?: number; expenseCost?: number; basis?: string };
   id: string;
   type: 'VE 제안' | '수량 오류';
   docCategory?: DocCategory;
@@ -100,7 +164,7 @@ export interface VeItem {
   description: string;
   subDescription: string;
   location: string;
-  impactKw: number; // in KRW (절감 금액)
+  impactKw?: number; // KRW; undefined means not calculated
   status: '검토대기' | '긴급 확인' | '검토중' | '승인완료' | '적용중';
   itemCode?: string;
   beforeCostKw?: number; // 변경 전 금액 (KRW)
@@ -108,10 +172,18 @@ export interface VeItem {
   savingsRate?: number; // 절감률 (%)
   scheduleDays?: number; // 공기 영향 (일)
   calculationBasis?: string; // 세부 산출 근거
+  findingStatus?: 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
+  evidence?: string;
+  confidence?: number;
   unitPriceComparison?: string; // 단가 비교 요약
 }
 
 export interface UploadFile {
+  documentId?: string;
+  execution?: ReviewExecution;
+  reviewNarrative?: ReviewNarrative;
+  engineeringCalculations?: FireCalculationResult[];
+  previewPages?: string[];
   id: string;
   name: string;
   type: 'CAD' | 'PDF' | 'Spec' | 'BoQ' | 'Image';
@@ -119,7 +191,7 @@ export interface UploadFile {
   tradeCategory: TradeCategory;
   sizeMB: number;
   progress: number;
-  status: '대기중' | '업로드중' | '분석중' | '분석 완료' | '오류';
+  status: '대기중' | '업로드중' | '분석중' | '분석 완료' | '부분 완료' | '오류';
   uploadedAt: string;
   fileDataUrl?: string;
   drawingTitle?: string;
@@ -135,4 +207,3 @@ export interface SupabaseConfig {
   anonKey: string;
   isConnected: boolean;
 }
-

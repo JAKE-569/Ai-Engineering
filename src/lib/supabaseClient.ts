@@ -8,6 +8,7 @@ let customKey = '';
 export function saveSupabaseConfig(url: string, anonKey: string) {
   customUrl = url;
   customKey = anonKey;
+  supabaseClient = null;
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('posco_supabase_url', url);
     localStorage.setItem('posco_supabase_key', anonKey);
@@ -99,7 +100,8 @@ export async function syncInitialDataToSupabase(
       cad_url: r.cadUrl,
       engineer_notes: r.engineerNotes,
     }));
-    await client.from('review_items').insert(formattedReviews);
+    const { error } = await client.from('review_items').insert(formattedReviews);
+    if (error) throw error;
     return true;
   } catch (err) {
     console.error('Error syncing to Supabase:', err);

@@ -1,0 +1,83 @@
+import { normalizeFinding, severityLabel } from '../lib/reviewClassification';
+import { opinionEvidence } from '../lib/veCost';
+import { hasCoordinates, executionLabel } from '../lib/reviewNormalization';
+import React, { useEffect, useMemo, useState } from 'react';
+import { X, Search, FileText, Maximize2, Minimize2, Printer } from 'lucide-react';
+import { DesignErrorItem, ReviewItem, UploadFile } from '../types';
+import { DrawingCanvasPreview } from './DrawingCanvasPreview';
+import './ReviewWorkspaceModal.css';
+import { printReviewReport } from '../lib/reviewReportPrint';
+
+interface Props { errorItem: DesignErrorItem | null; uploadFiles: UploadFile[]; reviewItems: ReviewItem[]; onClose: () => void; onUpdateReviewItem?: (review: ReviewItem) => Promise<boolean>; }
+
+const severityStyle = (severity?: string) => severity === 'CRITICAL'
+  ? { text: 'text-red-700', dot: 'bg-red-600', badge: 'border-red-200 bg-red-50 text-red-700', bar: 'bg-red-600' }
+  : severity === 'WARNING'
+    ? { text: 'text-amber-700', dot: 'bg-amber-500', badge: 'border-amber-200 bg-amber-50 text-amber-700', bar: 'bg-amber-500' }
+    : { text: 'text-blue-700', dot: 'bg-blue-600', badge: 'border-blue-200 bg-blue-50 text-blue-700', bar: 'bg-blue-600' };
+
+const categoryStyle = (category?: string) => /원가|VE|절감|cost/i.test(category || '')
+  ? { text: 'text-emerald-700', dot: 'bg-emerald-600', bar: 'bg-emerald-600' }
+  : /안전|safety/i.test(category || '')
+    ? { text: 'text-amber-700', dot: 'bg-amber-500', bar: 'bg-amber-500' }
+    : { text: 'text-blue-700', dot: 'bg-blue-600', bar: 'bg-blue-600' };
+
+export const ReviewWorkspaceModal: React.FC<Props> = ({ errorItem, uploadFiles, reviewItems, onClose, onUpdateReviewItem }) => {
+  const [placing, setPlacing] = useState(false);
+  const [positionSaving, setPositionSaving] = useState(false);
+  const [positionError, setPositionError] = useState('');
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState(errorItem?.documentId || '');
+  const [selectedMarkupId, setSelectedMarkupId] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMarkupMenuOpen, setIsMarkupMenuOpen] = useState(false);
+  useEffect(() => { setSelectedId(errorItem?.documentId || ''); setSelectedMarkupId(''); }, [errorItem?.documentId]);
+  useEffect(() => { setPlacing(false); setPositionError(''); }, [selectedId]);
+  const selectedUpload = uploadFiles.find((file) => file.documentId === selectedId) || uploadFiles[0];
+  const selectedReview = reviewItems.find((item) => item.documentId === selectedId) || reviewItems.find((item) => item.documentId === errorItem?.documentId);
+  const source = selectedUpload || selectedReview;
+  const selectedFileName = selectedUpload?.name || selectedReview?.fileName || errorItem?.dwgFile;
+  const candidates = [...(selectedReview?.markups || []), ...(selectedUpload?.markups || []), ...(selectedReview?.ocrBlocks || [])];
+  const rawMarkups = (selectedReview?.markups || selectedUpload?.markups || (errorItem?.documentId === source?.documentId ? errorItem?.markups : []) || [])
+    .map((markup, index) => ({ ...normalizeFinding(markup, candidates), displayIndex: index + 1 }));
+  const markups = rawMarkups.map((markup, index) => ({ ...markup, displayIndex: index + 1, title: `${/원가|VE|절감|cost/i.test(markup.category || '') ? '[원가·VE]' : /안전|safety/i.test(markup.category || '') ? '[안전]' : '[설계]'} ${(markup.title || '').replace(/^\[[^\]]+\]\s*/i, '')}` }));
+  const activeMarkup = markups.find((markup) => markup.id === selectedMarkupId) || markups[0];
+  const documents = useMemo(() => uploadFiles.filter((file) => file.name.toLowerCase().includes(query.toLowerCase())), [uploadFiles, query]);
+  if (!errorItem) return null;
+  const activeSeverity = severityStyle(activeMarkup?.severity || errorItem?.severity);
+  const activeCategory = categoryStyle(activeMarkup?.category);
+  const code = activeMarkup?.codeClause || activeMarkup?.legalBasis || errorItem?.codeClause || '적용 법규 조항 미확인';
+  const evidence = (activeMarkup && opinionEvidence(activeMarkup) || activeMarkup?.comment || errorItem.description || '도면에서 확인된 증거 데이터가 없습니다.').trim();
+  const selectMarkup = (id: string) => { setPlacing(false); setPositionError(''); setSelectedMarkupId(id); setIsMarkupMenuOpen(false); };
+  const placeMarkup = async (position: { xPercent: number; yPercent: number; pageNumber: number }) => {
+    if (!selectedReview || !activeMarkup || !onUpdateReviewItem || positionSaving) return;
+    setPositionSaving(true); setPositionError('');
+    try {
+      const markups = (selectedReview.markups || []).map(item => item.id === activeMarkup.id ? { ...item, ...position } : item);
+      const saved = await onUpdateReviewItem({ ...selectedReview, markups });
+      if (saved) setPlacing(false); else setPositionError('주석 위치를 저장하지 못했습니다. 다시 지정하세요.');
+    } catch { setPositionError('주석 위치를 저장하지 못했습니다. 다시 지정하세요.'); }
+    finally { setPositionSaving(false); }
+  };
+  const printReport = (includeDrawings = true) => {
+    const fileDataUrl = source?.fileDataUrl || errorItem.fileDataUrl;
+    const previewPages = (source ? source.previewPages : errorItem.previewPages) || [];
+    const pages = previewPages.length ? previewPages : /^data:image\//.test(fileDataUrl || '') ? [fileDataUrl!] : [];
+    printReviewReport({ fileName: selectedFileName || errorItem.dwgFile, drawingTitle: source?.drawingTitle || errorItem.drawingTitle, drawingNumber: source?.drawingNumber || errorItem.errorCode, pages, markups, includeDrawings, execution: selectedReview?.execution });
+  };
+
+  return <div className="workspace-modal fixed inset-0 z-[120] bg-slate-950/80 p-0 md:p-3">
+    <div className={`mx-auto flex h-full flex-col overflow-hidden bg-white shadow-2xl ${isFullscreen ? 'w-full rounded-none' : 'max-w-[1500px] rounded-2xl'}`}>
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-blue-900 bg-[#0f2d55] px-5 text-white"><div><h2 className="text-base font-bold">도면 검토 워크스페이스</h2><p className="text-xs text-blue-100">{selectedUpload?.name || selectedReview?.fileName || errorItem.dwgFile} · {executionLabel(selectedReview?.execution)}</p></div><div className="flex gap-2"><button onClick={() => printReport(false)} title="검토의견 전체를 PDF로 출력" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#0f2d55] hover:bg-blue-50"><Printer className="h-4 w-4" /> 검토의견 PDF</button><button onClick={() => printReport(true)} title="검토결과를 PDF로 저장" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#0f2d55] hover:bg-blue-50"><Printer className="h-4 w-4" /> PDF 출력</button><button onClick={() => setIsFullscreen((v) => !v)} className="rounded-lg p-2 hover:bg-white/10">{isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}</button><button aria-label="워크스페이스 닫기" onClick={onClose} className="rounded-lg p-2 hover:bg-white/10"><X className="h-5 w-5" /></button></div></header>
+      <div className="review-workspace-grid grid min-h-0 flex-1 grid-cols-[250px_minmax(0,1fr)_380px]">
+        <aside className="min-h-0 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4"><div className="mb-4 flex items-center justify-between"><h3 className="font-bold text-slate-800">도면 목록</h3><span className="text-xs text-slate-500">{documents.length}건</span></div><div className="relative mb-4"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="도면 검색" className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-2 text-xs outline-none focus:border-blue-500" /></div><div className="space-y-2">{documents.map((file) => <button key={file.id} onClick={() => { setSelectedId(file.documentId || ''); setSelectedMarkupId(''); }} className={`w-full rounded-lg border p-3 text-left ${selectedId === file.documentId ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-300'}`}><div className="flex items-start gap-2"><FileText className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" /><span className="min-w-0"><b className="block truncate text-xs text-slate-800">{file.name}</b><span className="mt-1 block text-[10px] text-slate-500">{file.previewPages?.length || 1}페이지 · {file.status}</span></span></div></button>)}</div></aside>
+        <main className="min-h-0 bg-slate-200 p-4"><div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300 bg-white"><div className="flex items-center justify-between border-b border-slate-200 px-4 py-3"><div><b className="text-sm text-slate-800">{source?.drawingTitle || source?.name || errorItem.dwgFile}</b><span className="ml-2 text-xs text-slate-500">{source?.drawingNumber || errorItem.errorCode}</span></div><span className="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-800">위치 표시 {markups.filter(hasCoordinates).length} / 의견 {markups.length}건</span></div><div className="min-h-0 flex-1 p-3"><DrawingCanvasPreview key={source?.documentId || selectedId} fileDataUrl={source?.fileDataUrl || errorItem.fileDataUrl} cadUrl={source && 'cadUrl' in source ? source.cadUrl : errorItem.cadUrl} previewPages={source ? source.previewPages : errorItem.previewPages} fileName={selectedFileName || errorItem.dwgFile} drawingTitle={source?.drawingTitle || errorItem.drawingTitle} drawingNumber={source?.drawingNumber || errorItem.errorCode} markups={markups} ocrBlocks={source ? source.ocrBlocks : errorItem.ocrBlocks} selectedMarkupId={selectedMarkupId} onMarkupSelect={selectMarkup} placementMode={placing && !positionSaving} onPlaceMarkup={placeMarkup} className="h-full w-full" /></div></div></main>
+        <aside className="min-h-0 overflow-y-auto border-l border-slate-200 bg-white p-5"><div className="border-b border-slate-200 pb-4"><div className="mb-2 flex gap-2"><span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${activeSeverity.badge}`}>심각도: {severityLabel(activeMarkup?.severity || errorItem.severity)} · {activeMarkup?.findingStatus || 'NEEDS_CONFIRMATION'}{activeMarkup && !hasCoordinates(activeMarkup) ? ' · 위치 미확인' : ''}<span className={`ml-2 inline-block h-2 w-2 rounded-full ${activeSeverity.dot}`} /></span><span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700">AI 검토</span></div><div className="relative mb-3"><button type="button" onClick={() => setIsMarkupMenuOpen((v) => !v)} className={`flex w-full items-center justify-between rounded-lg border p-2 text-left text-xs font-bold ${activeSeverity.text} bg-white`}><span className="truncate">{activeMarkup ? `${activeMarkup.displayIndex}. ${activeMarkup.title}` : '검토의견을 선택하세요'}</span><span className={`ml-2 h-2.5 w-2.5 shrink-0 rounded-full ${activeSeverity.dot}`} /></button>{isMarkupMenuOpen && <div className="absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-300 bg-white p-1 shadow-xl">{markups.map((markup, index) => { const style = severityStyle(markup.severity); return <button type="button" key={markup.id || index} onClick={() => selectMarkup(markup.id)} className={`flex w-full items-center justify-between rounded-md border-l-4 px-2 py-2 text-left text-xs hover:bg-slate-50 ${style.bar} ${activeMarkup?.id === markup.id ? 'bg-slate-100' : ''}`}><span className={`truncate font-bold ${style.text}`}>{markup.displayIndex}. {markup.title}{markup.pageNumber ? ` · Page ${markup.pageNumber}` : ''}</span><span className={`ml-2 h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} /></button>; })}</div>}</div><h3 className="text-lg font-bold leading-snug text-slate-900">{activeMarkup?.title || errorItem.description}</h3></div><section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <button type="button" disabled={!activeMarkup || !selectedReview || !onUpdateReviewItem || positionSaving} onClick={() => setPlacing(value => !value)} className="rounded border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-40">{positionSaving ? '위치 저장 중…' : placing ? '위치 지정 취소' : activeMarkup && hasCoordinates(activeMarkup) ? '주석 위치 수정' : '주석 위치 지정'}</button>
+        {placing && <p role="status" className="mt-2 text-xs text-blue-700">도면에서 이 의견에 해당하는 위치를 클릭하세요.</p>}
+        {positionError && <p role="alert" className="mt-2 text-xs text-red-700">{positionError}</p>}
+      </section><section className="mt-5"><p className="text-xs text-amber-800">{selectedReview?.execution?.failedPages.map(p => `페이지 ${p.pageNumber}: ${p.reason}`).join('; ')}{selectedReview?.execution?.synthesisError}</p><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">검토 근거 (LOGIC)</h4><div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">{code}</div></section><section className="mt-5"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">증거 데이터 (EVIDENCE)</h4><div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p data-testid="review-evidence" className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{evidence}</p></div></section><section className="mt-5 border-t border-slate-200 pt-4"><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">검토 의견 목록</h4><div className="space-y-2">{markups.map((markup, index) => { const style = severityStyle(markup.severity); return <button key={markup.id || index} onClick={() => selectMarkup(markup.id)} className={`flex w-full overflow-hidden rounded-lg border text-left text-xs ${activeMarkup?.id === markup.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}><span className={`w-1.5 shrink-0 ${style.bar}`} /><span className="p-3"><b className={`block ${style.text}`}>{markup.displayIndex}. {markup.title}</b><span className="mt-1 block text-slate-500">{markup.comment}</span></span></button>; })}</div></section></aside>
+      </div>
+    </div>
+  </div>;
+};

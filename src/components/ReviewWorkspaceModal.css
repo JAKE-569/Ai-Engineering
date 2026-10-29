@@ -1,0 +1,3 @@
+.workspace-modal > div > header button.bg-white { color: #163b60 !important; }
+.workspace-modal > div > header button.bg-white svg { color: #163b60 !important; }
+.workspace-modal [data-testid="drawing-stage"] { background: #edf2f7; }

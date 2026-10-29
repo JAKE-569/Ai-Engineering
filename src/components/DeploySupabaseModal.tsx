@@ -35,10 +35,11 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
     setIsTestingBackend(true);
     try {
       const res = await fetch('/api/backend-status');
+      if (!res.ok) throw new Error('백엔드 연결 실패');
       const data = await res.json();
       setBackendStatusInfo(data);
     } catch (err) {
-      setBackendStatusInfo({ status: 'active', message: '백엔드 Express 서버 정상 가동 중' });
+      setBackendStatusInfo({ status: 'error', connected: false, message: '백엔드 연결 실패' });
     } finally {
       setIsTestingBackend(false);
     }
@@ -104,10 +105,10 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-1">
                   <p className="font-bold text-emerald-900 text-sm">
-                    백엔드 데이터베이스 & AI Engine 연동 완료 (Pre-Integrated)
+                    로컬 저장소 및 AI 연결 상태
                   </p>
                   <p className="text-emerald-800 leading-relaxed">
-                    Express 백엔드 서버에서 PostgreSQL 데이터베이스 및 Gemini 3.6 Flash Vision OCR 엔진 연동이 수행되어 있습니다.
+                    P-GPT 키 설정: {backendStatusInfo?.aiEngines?.gemini?.configured ? '설정됨' : '미설정'} · 실제 호출: {backendStatusInfo?.aiEngines?.gemini?.lastCall ? (backendStatusInfo.aiEngines.gemini.lastCall.success ? '성공' : '실패') : '미검증'}
                   </p>
                 </div>
               </div>
@@ -118,7 +119,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
                     백엔드 DB 엔진
                   </span>
                   <p className="font-headline font-bold text-sm text-[#000d5f]">
-                    PostgreSQL / Supabase (Active)
+                    프로젝트 폴더 / local-data
                   </p>
                   <p className="text-xs text-[#454651]">
                     도면 검토 데이터, OCR 블록 및 안전검토 리포트 자동 저장
@@ -130,7 +131,7 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
                     서버 인프라
                   </span>
                   <p className="font-headline font-bold text-sm text-[#000d5f]">
-                    Express AI Server Active
+                    Express 로컬 서버 ({backendStatusInfo?.status === 'ok' ? '응답 정상' : '연결 확인 필요'})
                   </p>
                   <p className="text-xs text-[#454651]">
                     Vite + Express 서버 통합 서빙 (/api/gemini/review-drawing)
