@@ -1,13 +1,16 @@
 import { geminiBaseUrl, geminiModels, geminiConnectionStatus } from '../src/services/geminiService.js';
+import { pgptStatus } from '../src/services/pgptService.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
   res.status(200).json({
     status: 'ok',
-    connected: geminiConnectionStatus()?.success === true,
+    connected: geminiConnectionStatus()?.success === true || pgptStatus('gpt').lastCall?.success === true || pgptStatus('claude').lastCall?.success === true,
     localStorage: 'local-data/',
     backendDatabase: process.env.SUPABASE_URL ? 'Supabase PostgreSQL + pgvector RAG' : 'Supabase not configured',
     aiEngines: {
+      gpt: pgptStatus('gpt'),
+      claude: pgptStatus('claude'),
       gemini: { baseUrl: geminiBaseUrl(), modelOrder: geminiModels(), configured: Boolean(process.env.GEMINI_API_KEY), lastCall: geminiConnectionStatus() },
       cloudVision: {
         provider: 'Google Cloud Vision API',

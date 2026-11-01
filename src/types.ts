@@ -2,7 +2,8 @@ import type { OpinionConfirmation } from './lib/reportReview';
 import type { VeCostEstimate, VeCostInput } from './lib/veCost';
 import type { ReviewExecution, FindingStatus } from './lib/reviewNormalization';
 export type PageTab = 'dashboard' | 'safety' | 'errors' | 'cost_ve' | 'upload' | 'report' | 'deploy_guide';
-export type ReviewProvider = 'gemini' | 'nvidia';
+export type ReviewProvider = 'gemini' | 'nvidia' | 'gpt' | 'claude';
+export interface ReviewAiMetadata { provider: ReviewProvider; requestedModel: string; pageModels: { pageNumber: number; model: string }[]; }
 
 export type DocCategory = '도면' | '시방서' | '내역서' | '구조계산서';
 export type TradeCategory = '토목' | '건축' | '건축기계' | '건축전기' | '소방';
@@ -69,6 +70,7 @@ export interface ReviewNarrative {
 }
 
 export interface ReviewItem {
+  ai?: ReviewAiMetadata;
   opinionConfirmations?: Record<string, OpinionConfirmation>;
   documentId?: string;
   execution?: ReviewExecution;
@@ -179,6 +181,7 @@ export interface VeItem {
 }
 
 export interface UploadFile {
+  ai?: ReviewAiMetadata;
   documentId?: string;
   execution?: ReviewExecution;
   reviewNarrative?: ReviewNarrative;

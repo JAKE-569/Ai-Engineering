@@ -13,6 +13,72 @@ import synthesize from '../api/gemini/synthesize-review';
 import status from '../api/backend-status';
 import estimateVe from '../api/gemini/estimate-ve';
 
+test('GPT and Claude selections survive queued PDF reviews, reload and subsequent VE estimates', { timeout: 120000 }, async () => {
+  const beforeEnv = { ...process.env };
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-eng-multi-model-'));
+  const proxy = express(); proxy.use(express.json({ limit: '50mb' }));
+  const calls: { model: string; image: boolean; estimate: boolean; path: string }[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let gated = false;
+  proxy.post(['/v1/chat/completions', '/v1/messages'], async (req, res) => {
+    const content = req.body.messages[0].content;
+    const prompt = content.find((part: any) => part.type === 'text').text;
+    const image = content.some((part: any) => part.type === 'image' || part.type === 'image_url');
+    const isEstimate = prompt.includes('VE_ASSUMPTION_ESTIMATE');
+    calls.push({ model: req.body.model, image, estimate: isEstimate, path: req.path });
+    if (!gated) { gated = true; await gate; }
+    const data = isEstimate ? { calculationBasis: '시험용 가정 산출', costEstimate: { currency: 'KRW', basisType: 'llm-assumption', scope: '작업 1개소 가정', vatBasis: '별도', lines: [{ label: '작업', unit: '개', beforeQuantity: 1, afterQuantity: 1, beforeUnitPrice: 100000, afterUnitPrice: 80000, quantitySource: '1개 가정', unitPriceSource: '시험 단가 가정' }], additionalCost: 0, additionalCostBasis: '추가비용 없음 가정', assumptions: ['수량과 단가 가정'], missingInputs: ['실제 견적'] } } : image ? { drawingTitle: '모델 선택 시험', summary: '검토 근거 확인 필요', designItems: [], safetyItems: [], veItems: [{ title: '작업 개선', description: '접합 작업 비교', evidence: '작업 상세 미확인', status: 'NEEDS_CONFIRMATION' }] } : { summary: '페이지별 종합 검토 완료' };
+    const text = JSON.stringify(data);
+    if (req.path.endsWith('/messages')) return res.json({ id: 'msg_browser', type: 'message', role: 'assistant', model: req.body.model, content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } });
+    return res.json({ id: 'chat_browser', object: 'chat.completion', model: req.body.model, choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: text } }] });
+  });
+  const mock = await listen(proxy);
+  process.env.PGPT_API_KEY = 'browser-test-key'; process.env.PGPT_GPT_BASE_URL = mock.url + '/v1'; process.env.PGPT_CLAUDE_BASE_URL = mock.url;
+  process.env.PGPT_GPT_MODELS = 'gpt-first,gpt-selected'; process.env.PGPT_CLAUDE_MODELS = 'claude-selected';
+  process.env.GOOGLE_CLOUD_VISION_API_KEY = ''; process.env.GOOGLE_CLOUD_VISION_USE_ADC = '';
+  const app = express(); app.use(express.json({ limit: '50mb' })); app.use('/api/local/reviews', createReviewRouter(root));
+  app.post('/api/gemini/review-drawing', (req, res) => review(req as any, res as any));
+  app.post('/api/gemini/synthesize-review', (req, res) => synthesize(req as any, res as any));
+  app.post('/api/gemini/estimate-ve', (req, res) => estimateVe(req as any, res as any));
+  app.get('/api/backend-status', (req, res) => status(req as any, res as any)); app.use(express.static('dist'));
+  const host = await listen(app); const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+    const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    const records = async () => (await (await fetch(host.url + '/api/local/reviews')).json()).records;
+    await page.goto(host.url); await page.getByRole('button', { name: /새 문서 검토/ }).click();
+    await page.getByRole('button', { name: /^GPT 사내/ }).click();
+    await expect(page.getByRole('combobox', { name: '사용 모델' })).toContainText('gpt-selected');
+    await page.getByRole('combobox', { name: '사용 모델' }).selectOption('gpt-selected');
+    await page.locator('input[type=file]').setInputFiles({ name: 'gpt.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() });
+    await expect.poll(() => calls.length).toBe(1);
+    await page.getByRole('button', { name: /^Claude 사내/ }).click();
+    await page.locator('input[type=file]').setInputFiles({ name: 'claude.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() });
+    release();
+    await expect.poll(async () => (await records()).length, { timeout: 30000 }).toBe(2);
+    for (const provider of ['gpt', 'claude']) {
+      const record = (await records()).find((r: any) => r.bundle.uploadFile.name === provider + '.pdf');
+      assert.equal(record.bundle.reviewItem.execution.state, 'complete');
+      assert.equal(record.bundle.reviewItem.ai.provider, provider);
+      assert.equal(record.bundle.reviewItem.ai.requestedModel, provider + '-selected');
+      assert.deepEqual(record.bundle.reviewItem.ai.pageModels, [{ pageNumber: 1, model: provider + '-selected' }, { pageNumber: 2, model: provider + '-selected' }]);
+      assert.equal(record.bundle.uploadFile.ai.provider, provider);
+      assert.ok(calls.some(call => call.model === provider + '-selected' && !call.image));
+    }
+    assert.ok(calls.every(call => call.model !== 'gpt-first'));
+    await page.reload(); await page.getByRole('button', { name: /원가 및 VE/ }).click();
+    await page.getByRole('button', { name: '미산정 항목 LLM 가정 산출', exact: true }).click();
+    await expect.poll(async () => (await records()).flatMap((r: any) => r.bundle.veItems).filter((v: any) => v.costEstimate).length, { timeout: 15000 }).toBe(4);
+    for (const record of await records()) {
+      assert.ok(record.bundle.veItems.every((v: any) => v.costEstimate.generatedBy === record.bundle.reviewItem.ai.requestedModel));
+    }
+    assert.ok(calls.some(call => call.estimate && call.model === 'claude-selected' && call.path === '/v1/messages'));
+    assert.ok(calls.some(call => call.estimate && call.model === 'gpt-selected' && call.path === '/v1/chat/completions'));
+    assert.deepEqual(errors, []);
+  } finally { release(); await browser.close(); host.server.close(); mock.server.close(); process.env = beforeEnv; assert.ok(path.resolve(root).startsWith(path.resolve(os.tmpdir()) + path.sep)); await fs.rm(root, { recursive: true, force: true }); }
+});
+
 async function listen(app: express.Express) {
   const server = app.listen(0, '127.0.0.1'); await once(server, 'listening');
   return { server, url: `http://127.0.0.1:${(server.address() as any).port}` };

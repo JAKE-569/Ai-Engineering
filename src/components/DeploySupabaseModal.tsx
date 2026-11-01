@@ -108,7 +108,8 @@ export const DeploySupabaseModal: React.FC<DeploySupabaseModalProps> = ({
                     로컬 저장소 및 AI 연결 상태
                   </p>
                   <p className="text-emerald-800 leading-relaxed">
-                    P-GPT 키 설정: {backendStatusInfo?.aiEngines?.gemini?.configured ? '설정됨' : '미설정'} · 실제 호출: {backendStatusInfo?.aiEngines?.gemini?.lastCall ? (backendStatusInfo.aiEngines.gemini.lastCall.success ? '성공' : '실패') : '미검증'}
+                    Gemini 키 설정: {backendStatusInfo?.aiEngines?.gemini?.configured ? '설정됨' : '미설정'} · 실제 호출: {backendStatusInfo?.aiEngines?.gemini?.lastCall ? (backendStatusInfo.aiEngines.gemini.lastCall.success ? '성공' : '실패') : '미검증'}
+                    {(['gpt', 'claude'] as const).map(provider => <span key={provider} className="block">{provider === 'gpt' ? 'GPT' : 'Claude'} 키 설정: {backendStatusInfo?.aiEngines?.[provider]?.configured ? '설정됨' : '미설정'} · 실제 호출: {backendStatusInfo?.aiEngines?.[provider]?.lastCall ? (backendStatusInfo.aiEngines[provider].lastCall.success ? '성공' : '실패') : '미검증'} · {backendStatusInfo?.aiEngines?.[provider]?.lastCall?.model || backendStatusInfo?.aiEngines?.[provider]?.modelOrder?.[0]}</span>)}
                   </p>
                 </div>
               </div>

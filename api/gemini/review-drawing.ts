@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateGeminiJson, geminiModels, geminiError } from '../../src/services/geminiService.js';
+import { geminiModels } from '../../src/services/geminiService.js';
+import { generateReviewJson, isDirectReviewProvider, reviewAiError, type DirectReviewProvider } from '../../src/services/reviewAiService.js';
+import { pgptModels, validatePgptModel } from '../../src/services/pgptService.js';
 import { normalizeReview, parseModelJson } from '../../src/lib/reviewNormalization.js';
 import { GoogleAuth } from 'google-auth-library';
 // Keep the extension explicit: Vercel runs this function as native ESM.
@@ -121,11 +123,11 @@ async function cloudVisionOcrOnce(base64Data: string, mimeType: string) {
   return { configured: true, text, blocks };
 }
 const parseJson = (text: string) => { try { return parseModelJson(text); } catch { return null; } };
-const geminiModelChain = geminiModels;
+
 const documentGuidance = (category: string) => `문서 종류: ${category}. ${structuralReviewGuidance}\n${veCostGuidance}`;
-async function runGeminiReview(input: { fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
+async function runDirectReview(input: { provider: DirectReviewProvider; fileName: string; mimeType: string; base64Data: string; pageNumber: number; totalPages: number; docCategory: string; tradeCategory: string; model?: string; rules?: any[]; cloudVisionText?: string }) {
   const prompt = `심각도는 적절·OK·올바른 설계는 INFO, 추가 확인 필요는 WARNING, 법규 상충·허용치 초과·최소기준 미달·한계 근접은 CRITICAL로 구분하세요. 부정문과 조건문을 구분하고 한계 근접을 실제 위반으로 단정하지 마세요. 각 의견마다 관련 설비·치수·텍스트의 실제 위치를 찾아 이미지 좌상단 기준 0~100% xPercent/yPercent를 제공하세요. 같은 관찰의 visualFindingId 또는 ocrBlockId를 유지하여 좌표를 연결하세요. 위치를 확인할 수 없으면 null을 유지하세요. 당신은 ${input.tradeCategory} 분야의 수석 설계검토 전문가입니다. ${documentGuidance(input.docCategory)} 업로드된 실제 문서 이미지와 Google Cloud Vision OCR 결과만 근거로 ${input.pageNumber}/${input.totalPages} 페이지를 검토하세요. 도면과 무관한 예시 의견을 작성하지 마세요. 확인할 수 없는 값은 확인 불가로 표시하세요. 설계오류뿐 아니라 안전, 법규, 시공 전후 확인사항, 타분야 인터페이스, 원가절감(VE)을 구분하세요. 아래 검색된 법규 조항을 검토 기준으로 사용하되, 도면에서 확인되지 않는 사항은 NEEDS_CONFIRMATION으로 표시하세요. 모든 항목에 도면 근거와 실제 적용한 법규 조항의 codeClause를 기재하고 status는 PASS, FAIL, NEEDS_CONFIRMATION 중 하나입니다. 확인하지 못한 값은 NEEDS_CONFIRMATION이며 좌표를 모르면 xPercent/yPercent는 null로 반환하세요. JSON만 반환하세요. Google Cloud Vision OCR: ${input.cloudVisionText || 'OCR 결과 없음'}. SUMMARY는 요약, EXCERPT는 발췌이며 원문 전체로 인용하지 마세요. 검색 법규/RAG 근거: ${JSON.stringify(input.rules || [])}. 다음 구조를 사용하세요: {"drawingTitle":"","drawingNumber":"","scale":"","rawOcrText":"","ocrBlocks":[],"visualFindings":[],"designItems":[],"safetyItems":[],"veItems":[],"findings":[],"summary":"","reviewStatus":"심각|주의|양호"}. 각 검토항목은 title, description, evidence, codeClause, severity, status, xPercent, yPercent를 포함해야 합니다.`;
-  const result = await generateGeminiJson(prompt, { model: input.model, image: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } });
+  const result = await generateReviewJson(input.provider, prompt, { model: input.model, image: { mimeType: input.mimeType, data: stripDataUrl(input.base64Data) } });
   return { ...normalizeReview(result.data, input.pageNumber, input.totalPages), _modelUsed: result.model };
 }
 
@@ -133,9 +135,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { fileName, mimeType = 'image/png', base64Data, pdfText = '', pageNumber = 1, totalPages = 1, docCategory = '도면', tradeCategory = '소방', provider = 'gemini' } = req.body || {};
   if (typeof fileName !== 'string' || typeof base64Data !== 'string' || !base64Data || !/^image\/(png|jpeg|webp)$/.test(mimeType) || !Number.isInteger(pageNumber) || !Number.isInteger(totalPages) || pageNumber < 1 || pageNumber > totalPages || totalPages > 1000) return res.status(400).json({ error: '유효한 파일명, 이미지, 페이지 번호가 필요합니다.' });
-  if (provider === 'gemini') {
+  if (isDirectReviewProvider(provider)) {
     try {
-      // Gemini uses the local keyword rule database only. Supabase pgvector is
+      if (provider !== 'gemini') validatePgptModel(provider, req.body?.model);
+      // Direct providers use the local keyword rule database only. Supabase pgvector is
       // intentionally reserved for the NVIDIA pipeline.
       // Vision OCR is optional input. If it cannot be reached (e.g. a company
       // firewall), review with Gemini alone and report why OCR was skipped.
@@ -149,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         visionOcr = { configured: true, text: '', blocks: [], error: visionError };
       }
       const initialRules = retrieveLocalRules({ trade: tradeCategory, docCategory, fileName });
-      let data = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: initialRules, cloudVisionText: visionOcr.text });
+      let data = await runDirectReview({ provider, fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: initialRules, cloudVisionText: visionOcr.text });
       // Re-run the same local keyword search against the model's observed text.
       // This is deliberately not vector search: Gemini remains local-keyword-only.
       const observedText = [
@@ -178,12 +181,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // from OCR content instead of only filename-level rules.
       if (enrichedRules.length > initialRules.length) {
         try {
-          data = await runGeminiReview({ fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: [...enrichedRules, ...screenedRules], cloudVisionText: visionOcr.text });
+          data = await runDirectReview({ provider, fileName, mimeType, base64Data, pageNumber, totalPages, docCategory, tradeCategory, model: req.body?.model, rules: [...enrichedRules, ...screenedRules], cloudVisionText: visionOcr.text });
         } catch (error: any) {
           // Keep the first-pass review rather than discarding a page that
           // already succeeded (and was already paid for).
-          data.partial = true; data.synthesisError = '법규 근거 재검토 실패: ' + geminiError(error);
-          console.warn(`Gemini second pass skipped for page ${pageNumber}; using the first-pass review: ${explainNetworkError(error).slice(0, 200)}`);
+          data.partial = true; data.synthesisError = '법규 근거 재검토 실패: ' + reviewAiError(error);
+          console.warn(`Gemini second pass skipped for page ${pageNumber}; using the first-pass review: ${reviewAiError(error).slice(0, 200)}`);
         }
       }
       const ruleByText = (item: any) => {
@@ -207,13 +210,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .filter((rule: any, index: number, list: any[]) => list.findIndex((item) => item.code === rule.code && item.title === rule.title) === index);
       const modelUsed = data._modelUsed;
       delete data._modelUsed;
-      data.engine = { provider: 'gemini', model: modelUsed, modelOrder: geminiModelChain(req.body?.model), legalSearch: 'local-keyword-rules' };
-      return res.status(200).json({ success: true, provider: 'gemini', model: modelUsed, data });
+      data.engine = { provider, model: modelUsed, modelOrder: provider === 'gemini' ? geminiModels(req.body?.model) : pgptModels(provider), legalSearch: 'local-keyword-rules' };
+      return res.status(200).json({ success: true, provider, model: modelUsed, data });
     } catch (error: any) {
-      const detail = geminiError(error);
-      console.error('Gemini drawing review failed:', detail);
-      const status = /P001/.test(detail) ? 401 : /P002|403/.test(detail) ? 403 : /429/.test(detail) ? 429 : 502;
-      return res.status(status).json({ error: 'Gemini drawing review failed', detail });
+      const detail = reviewAiError(error);
+      console.error(provider + ' drawing review failed:', detail);
+      const status = /P001/.test(detail) ? 401 : /P002|403/.test(detail) ? 403 : /429/.test(detail) ? 429 : [400, 401, 403, 413, 429, 503].includes(error?.status) ? error.status : 502;
+      return res.status(status).json({ error: provider + ' 도면 검토 실패', detail });
     }
   }
   if (provider !== 'nvidia') return res.status(400).json({ error: `Unsupported review provider: ${provider}` });

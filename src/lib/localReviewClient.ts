@@ -129,7 +129,7 @@ export async function estimateLocalVeCost(item: VeItem, review?: ReviewItem): Pr
   const context = { fileName: review?.fileName, drawingTitle: review?.drawingTitle, docCategory: review?.docCategory,
     pageNumber: item.pageNumber, relatedOpinions: (review?.markups || []).filter(m => m.pageNumber === item.pageNumber).slice(0, 8).map(m => ({ title: m.title, comment: m.comment, evidence: m.evidence, pageNumber: m.pageNumber })) };
   const response = await fetch('/api/gemini/estimate-ve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(150000),
-    body: JSON.stringify({ provider: 'gemini', item: { description: item.description, subDescription: item.subDescription, evidence: item.evidence, location: item.location, tradeCategory: item.tradeCategory, pageNumber: item.pageNumber, costEstimate: item.costEstimate, calculationBasis: item.calculationBasis, beforeCostKw: item.beforeCostKw, afterCostKw: item.afterCostKw }, context }) });
+    body: JSON.stringify({ provider: previous.reviewItem.ai?.provider || 'gemini', model: previous.reviewItem.ai?.requestedModel || undefined, item: { description: item.description, subDescription: item.subDescription, evidence: item.evidence, location: item.location, tradeCategory: item.tradeCategory, pageNumber: item.pageNumber, costEstimate: item.costEstimate, calculationBasis: item.calculationBasis, beforeCostKw: item.beforeCostKw, afterCostKw: item.afterCostKw }, context }) });
   const result = await response.json();
   if (!response.ok || !result.success) throw new Error(result.detail || result.error || 'LLM 가정 산출 실패');
   if (!isAssumedVeCost(result.data) || calculateVeCost(result.data).state !== 'calculated') throw new Error('LLM 가정 표시 또는 산출 근거가 누락되었습니다.');

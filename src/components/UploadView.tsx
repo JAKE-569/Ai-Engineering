@@ -1,4 +1,5 @@
 import { normalizeReview, findingStatus, coordinate, executionLabel, ReviewExecution } from '../lib/reviewNormalization';
+import { prepareReviewImage } from '../lib/prepareReviewImage';
 import { normalizeFinding } from '../lib/reviewClassification';
 import React, { useState, useRef, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -84,6 +85,18 @@ export const UploadView: React.FC<UploadViewProps> = ({
   const [selectedTradeCategory, setSelectedTradeCategory] = useState<TradeCategory>('소방');
   const [reviewProvider, setReviewProvider] = useState<ReviewProvider>('gemini');
   const [reviewModel, setReviewModel] = useState('gemini-3.5-flash');
+  const [modelOptions, setModelOptions] = useState({ gpt: ['gpt-5.4'], claude: ['claude-sonnet-4.6'] });
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/backend-status', { signal: controller.signal }).then(r => r.ok ? r.json() : null).then(status => {
+      if (!status) return;
+      setModelOptions(previous => ({ gpt: status.aiEngines?.gpt?.modelOrder?.length ? status.aiEngines.gpt.modelOrder : previous.gpt, claude: status.aiEngines?.claude?.modelOrder?.length ? status.aiEngines.claude.modelOrder : previous.claude }));
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    if ((reviewProvider === 'gpt' || reviewProvider === 'claude') && !modelOptions[reviewProvider].includes(reviewModel)) setReviewModel(modelOptions[reviewProvider][0]);
+  }, [modelOptions, reviewProvider, reviewModel]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [queuedBatches, setQueuedBatches] = useState(0);
@@ -188,11 +201,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      const ai: NonNullable<ReviewItem['ai']> = { provider: reviewProvider, requestedModel: reviewModel, pageModels: [] };
       let sourceDataUrl = '';
       pdfTextByPageRef.current = [];
       setBatchProgress({ current: completedUnits, total: totalUnits });
       setProcessingStatus(
-        `[${i + 1}/${files.length}] "${file.name}" ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron Vision' : 'Gemini Vision'} ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
+        `[${i + 1}/${files.length}] "${file.name}" ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron Vision' : reviewModel} ${selectedTradeCategory} 공종 전문가 검토 수행 중...`
       );
 
       if (i > 0) {
@@ -214,7 +228,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         let reviewPages = [fileDataUrl];
         let reviewMimeType = file.type || 'image/png';
         if (fileType === 'PDF') {
-          setProcessingStatus(`[${i + 1}/${files.length}] PDF 페이지를 이미지로 변환하여 ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron Vision' : 'Gemini Vision'} 검토 중...`);
+          setProcessingStatus(`[${i + 1}/${files.length}] PDF 페이지를 이미지로 변환하여 ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron Vision' : reviewModel} 검토 중...`);
           reviewPages = await renderPdfPagesAsImages(fileDataUrl, reviewProvider);
           totalUnits += reviewPages.length - 1;
           setBatchProgress({ current: completedUnits, total: totalUnits });
@@ -227,11 +241,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
         let pageReviewFailures = 0;
         let lastPageReviewError = '';
         const reviewPageWithRetry = async (reviewDataUrl: string, pageNumber: number) => {
+          reviewDataUrl = await prepareReviewImage(reviewDataUrl, reviewProvider);
           if (reviewProvider === 'nvidia' && !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(reviewDataUrl)) {
             throw new Error(`NVIDIA 검토 요청 중 이미지 변환 결과가 없습니다. PDF를 페이지 이미지로 변환하지 못했습니다 (page ${pageNumber}).`);
           }
           let lastError: unknown;
-          const maxAttempts = reviewProvider === 'nvidia' ? 1 : 3;
+          const maxAttempts = reviewProvider === 'gemini' ? 3 : 1;
           for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
             const controller = new AbortController();
             const timeoutId = window.setTimeout(() => controller.abort(), 330000);
@@ -259,7 +274,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
         };
         for (let pageIndex = 0; pageIndex < reviewPages.length; pageIndex += 1) {
           const reviewDataUrl = reviewPages[pageIndex];
-          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} page ${pageIndex + 1}/${reviewPages.length} ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron 검토' : 'Gemini Vision 검토'}...`);
+          setProcessingStatus(`[${i + 1}/${files.length}] ${file.name} page ${pageIndex + 1}/${reviewPages.length} ${reviewProvider === 'nvidia' ? 'NVIDIA Nemotron 검토' : reviewModel + ' 검토'}...`);
         try {
           const response = await reviewPageWithRetry(reviewDataUrl, pageIndex + 1);
           const data = await response.json();
@@ -268,6 +283,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             completedUnits += 1;
             setBatchProgress({ current: completedUnits, total: totalUnits });
             onAiUsageEvent({ success: true, model: data.model });
+            ai.pageModels.push({ pageNumber: pageIndex + 1, model: data.model || reviewModel });
             execution.successfulPages.push(pageIndex + 1);
             if (pageResult.partial) { execution.partialPages.push(pageIndex + 1); (execution.partialReasons ||= []).push({ pageNumber: pageIndex + 1, reason: pageResult.synthesisError || pageResult.summary || '일부 검토만 수행됨' }); }
             pageResults.push({ pageNumber: pageIndex + 1, summary: pageResult.summary, designItems: pageResult.designItems, safetyItems: pageResult.safetyItems, veItems: pageResult.veItems, partial: Boolean(pageResult.partial) });
@@ -386,7 +402,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             sizeMB,
             progress: 100,
             status: '오류',
-            execution,
+            execution, ai,
             uploadedAt: failedAt,
             fileDataUrl,
             previewPages: fileType === 'PDF' ? reviewPages : undefined,
@@ -403,7 +419,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               tradeCategory: selectedTradeCategory,
               reviewType: '도면 검토',
               status: '미검토',
-              execution,
+              execution, ai,
               result: 'AI 검토 실패: 검토 결과를 받지 못했습니다.',
               updatedAt: failedAt,
               projectId,
@@ -548,7 +564,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           sizeMB,
           progress: 100,
           status: execution.state === 'complete' ? '분석 완료' : '부분 완료',
-          execution,
+          execution, ai,
           uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
           fileDataUrl,
           previewPages: fileType === 'PDF' ? reviewPages : undefined,
@@ -570,7 +586,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
           tradeCategory: selectedTradeCategory,
           reviewType: '설계 오류',
           status: apiResult?.reviewSummary?.status || '주의',
-          execution,
+          execution, ai,
           result:
             executionLabel(execution) + ' · ' + (apiResult?.reviewSummary?.result ||
             `[${selectedTradeCategory}/${selectedDocCategory}] AI 검토 완료 (${drawingNumber || '도면번호 확인 불가'})`),
@@ -693,7 +709,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
             progress: 100,
             status: '오류',
             uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-            fileDataUrl: sourceDataUrl,
+            fileDataUrl: sourceDataUrl, ai,
             drawingTitle: fallbackTitle,
             rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
             ocrBlocks: [],
@@ -711,7 +727,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
               updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
               projectId,
               description: `${fallbackTitle} 원본 파일이 등록되었습니다.`,
-              fileDataUrl: sourceDataUrl,
+              fileDataUrl: sourceDataUrl, ai,
               drawingTitle: fallbackTitle,
               rawOcrText: 'AI 검토 전 원본 파일 등록 완료',
               ocrBlocks: [],
@@ -866,7 +882,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => { setReviewProvider('gemini'); setReviewModel('gemini-3.5-flash'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'gemini' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">Gemini Vision</b><span className="text-[10px]">사내 P-GPT · Gemini 3.5 Flash</span></button>
             <button type="button" onClick={() => { setReviewProvider('nvidia'); setReviewModel('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'nvidia' ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">NVIDIA NIM</b><span className="text-[10px]">Nemotron Omni Vision</span></button>
+              {(['gpt', 'claude'] as const).map(provider => <button key={provider} type="button" onClick={() => { setReviewProvider(provider); setReviewModel(modelOptions[provider][0]); }} className={`rounded-lg border p-2 text-left ${reviewProvider === provider ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">{provider === 'gpt' ? 'GPT' : 'Claude'}</b><span className="text-[10px]">사내 P-GPT · {modelOptions[provider][0]}</span></button>)}
             </div>
+            {(reviewProvider === 'gpt' || reviewProvider === 'claude') && <label className="mt-3 block text-xs text-slate-700">사용 모델<select aria-label="사용 모델" value={reviewModel} onChange={e => setReviewModel(e.target.value)} className="ml-2 rounded border border-slate-300 px-2 py-1">{modelOptions[reviewProvider].map(model => <option key={model} value={model}>{model}</option>)}</select></label>}
           </div>
         </div>
       </div>
@@ -1039,7 +1057,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                         {file.drawingTitle || file.name}
                       </span>
                       <span className="text-[#454651] text-[11px]">
-                        {file.drawingNumber || '-'}
+                        {file.drawingNumber || '-'}{file.ai && <span className="block text-[10px] text-slate-500">{file.ai.requestedModel}</span>}
                       </span>
                     </td>
                     <td className="px-4 py-4 font-mono text-xs text-[#454651] text-center whitespace-nowrap">

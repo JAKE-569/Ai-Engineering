@@ -135,11 +135,10 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="rounded-lg bg-red-50 p-2"><div className="text-lg font-bold text-red-700">{aiUsage.failedRequests}</div><div className="text-[10px] text-slate-500">실패</div></div>
             </div>
             <dl className="space-y-2 text-xs">
-              <div className="flex justify-between gap-3"><dt className="text-slate-500">기본 모델</dt><dd className="font-mono font-semibold text-slate-800">Gemini Vision</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-slate-500">최근 응답 모델</dt><dd className="font-mono font-semibold text-slate-800">{aiUsage.lastModel || '대기 중'}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-slate-500">최근 갱신</dt><dd className="text-slate-700">{aiUsage.lastUpdated || '아직 요청 없음'}</dd></div>
             </dl>
-            <p className="mt-3 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-500">무료 잔여 한도는 Gemini API가 클라이언트에 제공하지 않으므로 정확한 잔여량 대신 실제 응답과 제한 상태를 표시합니다.</p>
+            <p className="mt-3 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-500">현재 세션의 실제 응답과 요청 제한 상태를 표시합니다. 모델은 문서 업로드 화면에서 선택합니다.</p>
           </div>
         )}
 

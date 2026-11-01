@@ -1,5 +1,35 @@
 # 회사 PC에서 실행하기
 
+## GPT·Claude 개발 브랜치 (2026-11-02)
+
+`feature/pgpt-gpt-claude`에서 Gemini/NVIDIA와 함께 GPT·Claude를 선택할 수 있습니다. 업로드 화면의 **AI 검토 엔진 선택 → GPT 또는 Claude → 사용 모델**에서 선택합니다. 파일 선택 당시의 엔진·모델을 페이지 검토, 파일 종합 요약과 후속 VE 가정 산출에 사용하며 문서와 함께 저장합니다. 모델 기록이 없는 기존 문서의 VE 산출은 기존 Gemini 동작을 유지합니다.
+
+| 엔진 | 기본 모델 | SDK 및 사내 경로 | 인증 |
+| --- | --- | --- | --- |
+| GPT | `gpt-5.4` | OpenAI SDK, `/gpgpta01-gpt/v1/chat/completions` | Bearer |
+| Claude | `claude-sonnet-4.6` | Anthropic SDK, `/gpgpta01-gpt/v1/messages` | `x-api-key` |
+
+둘 다 기존 OS/서버의 `GEMINI_API_KEY`를 사용합니다. `PGPT_API_KEY`를 설정하면 GPT·Claude에만 우선 적용합니다. 키는 서버에서만 읽습니다. Claude는 OpenAI 호환 경로에서 서버 오류(P099)가 발생하여, 실제 이미지·텍스트 응답이 확인된 Anthropic 전용 경로를 사용합니다. 텍스트만 전송할 때도 `content` 블록 배열이 필요합니다.
+
+`.env` 또는 `.env.local`에 모델 목록을 지정하면 업로드 화면에 반영됩니다. 아래 기본 모델은 실제 연결을 확인했습니다. 추가 모델은 사내 `/v1/models`의 정확한 ID와 사용 권한을 확인해 목록에 추가하고 검증하세요.
+
+```dotenv
+PGPT_GPT_MODELS=gpt-5.4
+PGPT_CLAUDE_MODELS=claude-sonnet-4.6
+# 예: PGPT_GPT_MODELS=gpt-5.4,gpt-5.4-mini
+# 예: PGPT_CLAUDE_MODELS=claude-sonnet-4.6,claude-opus-4.7
+```
+
+모델 목록은 허용 목록입니다. GPT·Claude는 선택한 모델 하나만 호출하며, 권한·쿼터·서버 오류 시 자동으로 다른 모델로 변경하지 않습니다. 연결 주소는 기존 `GOOGLE_GEMINI_BASE_URL`에서 파생하며 필요할 때 `PGPT_GPT_BASE_URL`(끝에 `/v1` 포함)과 `PGPT_CLAUDE_BASE_URL`(끝에 `/v1` 제외)로 각각 재지정합니다. 공개 API로 자동 전환하지 않습니다.
+
+`npm run check:pgpt-models`로 두 엔진을 검사합니다. `-- gpt` 또는 `-- claude`로 하나만 검사할 수 있습니다. 저장소의 작은 파란 정사각형 PNG와 짧은 텍스트를 실제 API에 보내므로 API 사용량이 발생합니다. 원본 도면과 검토자료는 이 검사에 사용하지 않습니다.
+
+도면 원본과 미리보기는 보존하고 GPT/Claude에 전송할 이미지에만 크기 제한을 적용합니다. 7,500px를 넘는 변 또는 엔진별 용량을 초과하면 JPEG로 축소합니다. 세부 치수 판독 품질은 실제 도면으로 별도 평가해야 합니다.
+
+개발 작업 폴더는 `C:\Users\h.s.jeong\Downloads\Ai-Engineering-gpt-claude`, 이 PC의 별도 실행 주소는 `http://localhost:3001`입니다. `.env.local`에 `PORT=3001`을 설정했습니다. 새로 복제한 환경은 기본 3000번을 사용하며, 필요하면 포트를 재설정하세요. 기존 폴더의 `local-data/`는 개발 폴더와 분리되어 있습니다.
+
+상세 변경·검증·재시작 위치는 [WORK_LOG_2026-11-02.md](WORK_LOG_2026-11-02.md)를 참조하세요.
+
 구조계산서와 구조도면은 각각 개별 검토합니다. 문서 간 자동 상호검토는 제거했습니다. 추가 업로드 대기열은 유지되며 도서 유형과 공종을 지정해 업로드하세요. 변경 이력은 [2026-10-28 작업 기록](WORK_LOG_2026-10-28.md)의 마지막 롤백 항목을 참조하세요.
 
 Node.js 22 또는 24 LTS를 권장합니다. 현재 PC에서는 Node.js 26에서도 검사했습니다.
