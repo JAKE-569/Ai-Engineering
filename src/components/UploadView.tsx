@@ -1,4 +1,5 @@
 import { normalizeReview, findingStatus, coordinate, executionLabel, ReviewExecution } from '../lib/reviewNormalization';
+import { buildDocumentReviewContext } from '../lib/documentReviewContext';
 import { prepareReviewImage } from '../lib/prepareReviewImage';
 import { normalizeFinding } from '../lib/reviewClassification';
 import React, { useState, useRef, useEffect } from 'react';
@@ -259,7 +260,7 @@ export const UploadView: React.FC<UploadViewProps> = ({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 signal: controller.signal,
-                body: JSON.stringify({ fileName: file.name, pageNumber, totalPages: reviewPages.length, mimeType: detectedMimeType || reviewMimeType, base64Data: reviewDataUrl, pdfText: pdfTextByPageRef.current[pageNumber - 1] || '', docCategory: selectedDocCategory, tradeCategory: selectedTradeCategory, provider: reviewProvider, model: reviewModel,  }),
+                body: JSON.stringify({ fileName: file.name, pageNumber, totalPages: reviewPages.length, mimeType: detectedMimeType || reviewMimeType, base64Data: reviewDataUrl, pdfText: pdfTextByPageRef.current[pageNumber - 1] || '', documentContext: fileType === 'PDF' ? buildDocumentReviewContext(pdfTextByPageRef.current, pageNumber) : undefined, docCategory: selectedDocCategory, tradeCategory: selectedTradeCategory, provider: reviewProvider, model: reviewModel,  }),
               });
               window.clearTimeout(timeoutId);
               if (response.ok) return response;
@@ -457,11 +458,11 @@ export const UploadView: React.FC<UploadViewProps> = ({
           checklistReview: [
             ...(apiResult?.designErrors || []).map((item: any, index: number) => ({ number: index + 1, category: '설계', topic: item.description, criteria: item.codeClause || '공종별 설계기준 확인 필요', observation: item.description, status: findingStatus(item.findingStatus ?? item.status), evidence: item.evidence || item.description, legalBasis: item.legalBasis || item.codeClause || '관련 기준 확인 필요', recommendation: item.suggestedFix || '설계도서 및 상세 계산서 보완 필요' })),
             ...(apiResult?.safetyItems || []).map((item: any, index: number) => ({ number: index + 1, category: '안전', topic: item.summary || item.title, criteria: item.codeClause || item.lawRegulation || '안전 기준 확인 필요', observation: item.details || item.description || item.summary, status: item.findingStatus || item.status || 'NEEDS_CONFIRMATION', evidence: item.evidence || item.details || item.summary, legalBasis: item.codeClause || item.lawRegulation || item.legalBasis || '관련 법규 확인 필요', recommendation: item.requiredConfirmation || item.recommendation || '현장 및 관련 서류 확인 필요' })),
-            ...(apiResult?.veItems || []).map((item: any, index: number) => ({ number: index + 1, category: '원가·VE', topic: item.description, criteria: item.calculationBasis || '원가·수량 근거 확인 필요', observation: item.subDescription, status: findingStatus(item.findingStatus ?? item.status), evidence: item.evidence || item.location, legalBasis: '계약·내역·시방서 대조 필요', recommendation: item.calculationBasis || '수량·단가·적용 조건 확인 후 VE 검토' })),
+            ...(apiResult?.veItems || []).map((item: any, index: number) => ({ number: index + 1, category: '원가·VE', topic: item.description, criteria: item.calculationBasis || '원가·수량 근거 확인 필요', observation: item.subDescription, status: findingStatus(item.findingStatus ?? item.status), evidence: item.evidence || item.location, legalBasis: '계약·내역·시방서 대조 필요', recommendation: item.correctiveAction || item.recommendation || item.calculationBasis || '수량·단가·적용 조건 확인 후 VE 검토' })),
           ],
-          preConstructionChecks: ['최신 Revision 및 현장 기존설비 상태 확인', '시공 전 타분야 간섭 및 공급범위 확인'],
-          postConstructionChecks: ['압력·누수·성능시험 및 연동시험 확인', 'As-built 및 준공서류 반영 확인'],
-          interfaceAndScopeChecks: ['건축·기계·전기·제어·전문업체 간 공급·시공·시험 책임분계 확인'],
+          preConstructionChecks: [],
+          postConstructionChecks: [],
+          interfaceAndScopeChecks: [],
           overallOpinion: apiResult?.reviewSummary?.description || '설계도서·계산서·현장조건의 추가 대조가 필요합니다.',
         };
         reviewNarrative.checklistReview = (reviewNarrative.checklistReview || []).map((item: any, index: number) => ({ ...item, number: index + 1 }));
@@ -492,9 +493,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
             comment: item.description || item.details || item.summary || '설계 검토 의견을 확인하십시오.',
             codeClause: item.codeClause || item.legalBasis,
             evidence: item.evidence || item.description,
-            correctiveAction: item.suggestedFix || item.recommendation,
+            correctiveAction: item.correctiveAction || item.suggestedFix || item.recommendation,
             severity: item.severity || 'WARNING',
-            findingStatus: findingStatus(item.findingStatus ?? item.status),
+            findingStatus: findingStatus(item.findingStatus ?? item.status), reviewBasis: item.reviewBasis,
             category: '설계',
             pageNumber: item.pageNumber,
             xPercent: item.xPercent,
@@ -506,9 +507,9 @@ export const UploadView: React.FC<UploadViewProps> = ({
             comment: item.details || item.description || item.observation || item.summary || item.recommendation || '안전 검토 근거가 확인되지 않았습니다.',
             codeClause: item.codeClause || item.lawRegulation || item.legalBasis,
             evidence: item.evidence || item.details || item.description || item.observation || item.summary,
-            correctiveAction: item.requiredConfirmation || item.recommendation,
+            correctiveAction: item.correctiveAction || item.requiredConfirmation || item.recommendation,
             severity: item.severity || 'WARNING',
-            findingStatus: findingStatus(item.findingStatus ?? item.status),
+            findingStatus: findingStatus(item.findingStatus ?? item.status), reviewBasis: item.reviewBasis,
             category: '안전',
             pageNumber: item.pageNumber,
             xPercent: item.xPercent,
@@ -518,12 +519,12 @@ export const UploadView: React.FC<UploadViewProps> = ({
             veCost: { costBasisType: item.costBasisType, costEstimate: item.costEstimate, beforeCostKw: item.beforeCostKw, afterCostKw: item.afterCostKw, calculationBasis: item.calculationBasis },
             id: item.id || `ve-${index + 1}`,
             title: item.title || item.description || `원가·VE 검토 ${index + 1}`,
-            comment: item.subDescription || item.description || '원가 및 시공성 개선 의견을 확인하십시오.',
-            codeClause: item.calculationBasis,
+            comment: item.description || item.subDescription || '원가 및 시공성 개선 의견을 확인하십시오.',
+            codeClause: item.codeClause || item.legalBasis,
             evidence: item.evidence || item.location || item.calculationBasis,
-            correctiveAction: item.calculationBasis,
+            correctiveAction: item.correctiveAction || item.recommendation || item.subDescription || item.calculationBasis,
             severity: item.severity || 'WARNING',
-            findingStatus: findingStatus(item.findingStatus ?? item.status),
+            findingStatus: findingStatus(item.findingStatus ?? item.status), reviewBasis: item.reviewBasis,
             category: '원가·VE',
             pageNumber: item.pageNumber,
             xPercent: item.xPercent,

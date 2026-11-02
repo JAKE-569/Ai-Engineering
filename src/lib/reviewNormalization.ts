@@ -1,5 +1,6 @@
 import { normalizeFinding } from './reviewClassification';
 import { normalizeVeCost } from './veCost';
+import { reviewText } from './reviewText';
 export { coordinate, hasCoordinates } from './reviewCoordinates';
 export type FindingStatus = 'PASS' | 'FAIL' | 'NEEDS_CONFIRMATION';
 export type ExecutionState = 'complete' | 'partial' | 'failed';
@@ -36,12 +37,22 @@ export function normalizeReview(value: any, pageNumber?: number, totalPages = 1)
   const normalizeItems = (items: any[], category: string) => items.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`${category} 검토항목 형식 오류`);
     const page = pageNumber ?? (Number.isInteger(item.pageNumber) && item.pageNumber >= 1 && item.pageNumber <= totalPages ? item.pageNumber : undefined);
-    const normalized = normalizeFinding({ ...item, pageNumber: page }, [...(Array.isArray(value.markups) ? value.markups : []), ...(Array.isArray(value.visualFindings) ? value.visualFindings : []), ...(Array.isArray(value.ocrBlocks) ? value.ocrBlocks : [])]);
+    const recommendation = reviewText(item.recommendation || item.correctiveAction || item.suggestedFix || item.requiredConfirmation);
+    const verification = reviewText(item.verification || item.verificationConditions);
+    const action = [recommendation, verification ? `확인 조건: ${verification}` : ''].filter(Boolean).join('\n');
+    const fields = { ...item, pageNumber: page, title: reviewText(item.title || item.summary || item.description),
+      description: reviewText(item.description || item.details || item.summary || item.engineeringAssessment),
+      evidence: reviewText(item.evidence), codeClause: reviewText(item.codeClause || item.legalBasis || item.lawRegulation),
+      recommendation, verification, correctiveAction: action, suggestedFix: action || reviewText(item.suggestedFix),
+      requiredConfirmation: action || reviewText(item.requiredConfirmation), subDescription: reviewText(item.subDescription) || (category === 've' ? action : ''),
+      calculationBasis: reviewText(item.calculationBasis),
+    };
+    const normalized = normalizeFinding(fields, [...(Array.isArray(value.markups) ? value.markups : []), ...(Array.isArray(value.visualFindings) ? value.visualFindings : []), ...(Array.isArray(value.ocrBlocks) ? value.ocrBlocks : [])]);
     return { ...normalized, sourceId: item.sourceId || item.id, id: `${category}-p${page ?? 'unknown'}-${index + 1}`,
-      title: String(item.title || item.summary || item.description || '검토항목'),
-      description: String(item.description || item.details || item.summary || ''),
-      evidence: String(item.evidence || '도면 근거 확인 필요'),
-      codeClause: String(item.codeClause || item.legalBasis || item.lawRegulation || '법규 근거 미확인'),
+      title: fields.title || '검토항목',
+      description: fields.description,
+      evidence: fields.evidence || '도면 근거 확인 필요',
+      codeClause: fields.codeClause,
       status: normalized.findingStatus,
       pageNumber: page,
     };

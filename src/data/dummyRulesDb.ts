@@ -57,9 +57,9 @@ export const dummyRulesDb: EngineeringRule[] = [
     checkCondition: (text) => ({ matched: /배관|밸브|펌프|수원/i.test(text), status: 'NEEDS_CONFIRMATION', evidence: '소방 수계통 구성 정보가 확인되었습니다.', recommendation: '회사 표준의 밸브 접근성, 시험배수, 펌프실 점검공간, 태그 규칙을 설계도서와 대조하십시오.' }),
   },
   {
-    id: 'kds-structural-clearance', trade: ['토목', '건축'], keywords: ['보', '기둥', '구조', '굴착', '흙막이'], code: 'KDS 21 30 00 / KDS 11 10 00', title: '구조·토공 간섭 및 안전성', severity: 'CRITICAL',
+    id: 'kds-structural-clearance', trade: ['토목', '건축'], keywords: ['굴착', '흙막이', '토공'], code: 'KDS 21 30 00 / KDS 11 10 00', title: '구조·토공 간섭 및 안전성', severity: 'CRITICAL',
     source: { title: 'KDS 21 30 00 가설 흙막이 설계기준 / KDS 11 00 00 지반 설계기준', url: 'https://www.codil.or.kr/detailAnwGuide.do?nserialno=2434', publisher: '국토교통부·건설기술정보시스템(CODIL)', accessedAt: '2026-08-10' },
-    checkCondition: (text) => ({ matched: /보|기둥|구조|굴착|흙막이/i.test(text), status: 'NEEDS_CONFIRMATION', evidence: '구조 또는 토공 관련 정보가 확인되었습니다.', recommendation: '구조계산서·흙막이 계산서·현장 조건과 도면의 치수 및 간섭을 대조하십시오.' }),
+    checkCondition: (text) => ({ matched: /굴착|흙막이|토공/i.test(text), status: 'NEEDS_CONFIRMATION', evidence: '굴착·흙막이 또는 토공 관련 정보가 확인되었습니다.', recommendation: '구조계산서·흙막이 계산서·현장 조건과 도면의 치수 및 간섭을 대조하십시오.' }),
   },
   {
     id: 'industrial-safety-health-law', trade: ['안전', '소방', '건축', '건축기계', '건축전기', '토목'],

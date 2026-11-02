@@ -19,6 +19,7 @@ export type ReviewStatus = '오류 의심' | '주의' | '정상' | '미검토' |
 export type SeverityLevel = 'CRITICAL' | 'WARNING' | 'INFO' | '위험' | '주의' | '정상';
 
 export interface ReviewMarkup {
+  reviewBasis?: 'document-check' | 'independent-calculation' | 'conditional-design';
   veCost?: VeCostInput;
   veItemId?: string;
   id: string;

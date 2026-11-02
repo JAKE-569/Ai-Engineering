@@ -21,7 +21,7 @@ test('GPT and Claude selections survive queued PDF reviews, reload and subsequen
   process.env.PGPT_SETTINGS_FILE = path.join(root, 'model-settings.json');
   const proxy = express(); proxy.use(express.json({ limit: '50mb' }));
   proxy.get('/v1/models', (_req, res) => res.json({ object: 'list', data: ['gpt-first', 'gpt-selected', 'claude-selected'].map(id => ({ id, object: 'model' })) }));
-  const calls: { model: string; image: boolean; estimate: boolean; path: string }[] = [];
+  const calls: { model: string; image: boolean; estimate: boolean; path: string; prompt: string }[] = [];
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   let gated = false;
@@ -30,9 +30,9 @@ test('GPT and Claude selections survive queued PDF reviews, reload and subsequen
     const prompt = content.find((part: any) => part.type === 'text').text;
     const image = content.some((part: any) => part.type === 'image' || part.type === 'image_url');
     const isEstimate = prompt.includes('VE_ASSUMPTION_ESTIMATE');
-    calls.push({ model: req.body.model, image, estimate: isEstimate, path: req.path });
+    calls.push({ model: req.body.model, image, estimate: isEstimate, path: req.path, prompt });
     if (!gated) { gated = true; await gate; }
-    const data = isEstimate ? { calculationBasis: '시험용 가정 산출', costEstimate: { currency: 'KRW', basisType: 'llm-assumption', scope: '작업 1개소 가정', vatBasis: '별도', lines: [{ label: '작업', unit: '개', beforeQuantity: 1, afterQuantity: 1, beforeUnitPrice: 100000, afterUnitPrice: 80000, quantitySource: '1개 가정', unitPriceSource: '시험 단가 가정' }], additionalCost: 0, additionalCostBasis: '추가비용 없음 가정', assumptions: ['수량과 단가 가정'], missingInputs: ['실제 견적'] } } : image ? { drawingTitle: '모델 선택 시험', summary: '검토 근거 확인 필요', designItems: [], safetyItems: [], veItems: [{ title: '작업 개선', description: '접합 작업 비교', evidence: '작업 상세 미확인', status: 'NEEDS_CONFIRMATION' }] } : { summary: '페이지별 종합 검토 완료' };
+    const data = isEstimate ? { calculationBasis: '시험용 가정 산출', costEstimate: { currency: 'KRW', basisType: 'llm-assumption', scope: '작업 1개소 가정', vatBasis: '별도', lines: [{ label: '작업', unit: '개', beforeQuantity: 1, afterQuantity: 1, beforeUnitPrice: 100000, afterUnitPrice: 80000, quantitySource: '1개 가정', unitPriceSource: '시험 단가 가정' }], additionalCost: 0, additionalCostBasis: '추가비용 없음 가정', assumptions: ['수량과 단가 가정'], missingInputs: ['실제 견적'] } } : image ? { drawingTitle: '모델 선택 시험', summary: '검토 근거 확인 필요', designItems: [{ title: '가새 검토', description: '부재 축력비 비교 0.008', evidence: { member: 6759, values: { Pu: 3.326, phiPn: 427.680 } }, recommendation: '접합부와 좌굴 내력을 재검산', verification: '순단면과 유효좌굴길이 확인', reviewBasis: 'document-check', status: 'PASS' }], safetyItems: [], veItems: [{ title: '작업 개선', description: '접합 작업 비교', evidence: { member: 6759 }, recommendation: '규격 통합과 접합 공법을 비교', verification: '시공단계 안정성 유지', reviewBasis: 'conditional-design', status: 'NEEDS_CONFIRMATION' }] } : { summary: '페이지별 종합 검토 완료' };
     const text = JSON.stringify(data);
     if (req.path.endsWith('/messages')) return res.json({ id: 'msg_browser', type: 'message', role: 'assistant', model: req.body.model, content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } });
     return res.json({ id: 'chat_browser', object: 'chat.completion', model: req.body.model, choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: text } }] });
@@ -70,10 +70,14 @@ test('GPT and Claude selections survive queued PDF reviews, reload and subsequen
     await page.reload(); await page.getByRole('button', { name: /새 문서 검토/ }).click();
     await page.getByRole('button', { name: /^GPT 사내/ }).click();
     await expect(page.getByRole('combobox', { name: '사용 모델' })).toHaveValue('gpt-selected');
-    await page.locator('input[type=file]').setInputFiles({ name: 'gpt.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() });
+    const sample = await PDFDocument.create();
+    sample.addPage().drawText('SOURCE_PAGE_ONE member 6759');
+    sample.addPage().drawText('MATERIALS SS275 SOURCE_PAGE_TWO');
+    const sampleBytes = Buffer.from(await sample.save());
+    await page.locator('input[type=file]').setInputFiles({ name: 'gpt.pdf', mimeType: 'application/pdf', buffer: sampleBytes });
     await expect.poll(() => calls.length).toBe(1);
     await page.getByRole('button', { name: /^Claude 사내/ }).click();
-    await page.locator('input[type=file]').setInputFiles({ name: 'claude.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() });
+    await page.locator('input[type=file]').setInputFiles({ name: 'claude.pdf', mimeType: 'application/pdf', buffer: sampleBytes });
     release();
     await expect.poll(async () => (await records()).length, { timeout: 30000 }).toBe(2);
     for (const provider of ['gpt', 'claude']) {
@@ -83,10 +87,24 @@ test('GPT and Claude selections survive queued PDF reviews, reload and subsequen
       assert.equal(record.bundle.reviewItem.ai.requestedModel, provider + '-selected');
       assert.deepEqual(record.bundle.reviewItem.ai.pageModels, [{ pageNumber: 1, model: provider + '-selected' }, { pageNumber: 2, model: provider + '-selected' }]);
       assert.equal(record.bundle.uploadFile.ai.provider, provider);
+      const markups = record.bundle.reviewItem.markups;
+      assert.match(markups[0].evidence, /6759/);
+      assert.match(markups[0].correctiveAction, /유효좌굴길이/);
+      assert.ok(markups.some((m: any) => m.reviewBasis === 'conditional-design' && /규격 통합/.test(m.correctiveAction)));
+      assert.ok(calls.filter(call => call.image && call.model === provider + '-selected').every(call => /SOURCE_PAGE_ONE/.test(call.prompt) && /SOURCE_PAGE_TWO/.test(call.prompt)));
       assert.ok(calls.some(call => call.model === provider + '-selected' && !call.image));
     }
     assert.ok(calls.every(call => call.model !== 'gpt-first'));
-    await page.reload(); await page.getByRole('button', { name: /원가 및 VE/ }).click();
+    await page.reload();
+    await page.getByRole('row').filter({ hasText: 'gpt.pdf' }).first().click();
+    await page.getByRole('button', { name: /도면 워크스페이스/ }).first().click();
+    await expect(page.getByTestId('review-evidence')).toContainText('6759');
+    await expect(page.getByTestId('review-evidence')).not.toContainText('[object Object]');
+    await expect(page.getByTestId('review-assessment')).toContainText('0.008');
+    await expect(page.getByTestId('review-action')).toContainText('유효좌굴길이');
+    if (process.env.BROWSER_ARTIFACT_DIR) { await fs.mkdir(process.env.BROWSER_ARTIFACT_DIR, { recursive: true }); await page.screenshot({ path: path.join(process.env.BROWSER_ARTIFACT_DIR, 'expert-review.png') }); }
+    await page.getByRole('button', { name: '워크스페이스 닫기' }).click();
+    await page.getByRole('button', { name: /원가 및 VE/ }).click();
     await page.getByRole('button', { name: '미산정 항목 LLM 가정 산출', exact: true }).click();
     await expect.poll(async () => (await records()).flatMap((r: any) => r.bundle.veItems).filter((v: any) => v.costEstimate).length, { timeout: 15000 }).toBe(4);
     for (const record of await records()) {
