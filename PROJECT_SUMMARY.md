@@ -2,6 +2,8 @@
 
 **2026-11-02 GPT·Claude 개발 브랜치:** `feature/pgpt-gpt-claude`. OpenAI SDK와 Anthropic SDK로 사내 P-GPT를 직접 호출하며, 기본 모델은 `gpt-5.4`와 `claude-sonnet-4.6`입니다. 이미지·텍스트·JSON 실제 응답을 검증했습니다. 엔진/모델 선택, 문서별 저장, 종합 요약과 후속 VE 산출을 지원합니다. 최신 작업 기록은 [WORK_LOG_2026-11-02.md](WORK_LOG_2026-11-02.md), 설정은 [LOCAL_SERVER.md](LOCAL_SERVER.md)를 참조하세요.
 
+**모델 설정 후속 변경:** 업로드 화면의 **GPT · Claude 모델 설정**에서 사내 모델 목록 조회와 기본 모델 저장을 지원합니다. `local-data/ai-model-settings.json`에 저장되어 서버 재시작 후 복원되며 문서별 선택은 **사용 모델**에서 변경할 수 있습니다.
+
 **다음 작업 시작점:** [2026-10-28 작업 기록: 하단 상호검토 롤백 포함](WORK_LOG_2026-10-28.md). 이전 기록은 [2026-10-27 작업 기록](WORK_LOG_2026-10-27.md)을 참조하세요.
 
 ## 2026-10-28 현재 상태: 개별 문서 검토

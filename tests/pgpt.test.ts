@@ -1,4 +1,7 @@
 import test from 'node:test';
+import path from 'node:path';
+import os from 'node:os';
+process.env.PGPT_SETTINGS_FILE = path.join(os.tmpdir(), 'unused-pgpt-settings-' + process.pid + '.json');
 import assert from 'node:assert/strict';
 import express from 'express';
 import { once } from 'node:events';

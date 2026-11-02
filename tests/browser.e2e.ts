@@ -12,11 +12,15 @@ import review from '../api/gemini/review-drawing';
 import synthesize from '../api/gemini/synthesize-review';
 import status from '../api/backend-status';
 import estimateVe from '../api/gemini/estimate-ve';
+import modelSettings from '../api/pgpt/models';
+process.env.PGPT_SETTINGS_FILE = path.join(os.tmpdir(), 'unused-browser-model-settings-' + process.pid + '.json');
 
 test('GPT and Claude selections survive queued PDF reviews, reload and subsequent VE estimates', { timeout: 120000 }, async () => {
   const beforeEnv = { ...process.env };
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-eng-multi-model-'));
+  process.env.PGPT_SETTINGS_FILE = path.join(root, 'model-settings.json');
   const proxy = express(); proxy.use(express.json({ limit: '50mb' }));
+  proxy.get('/v1/models', (_req, res) => res.json({ object: 'list', data: ['gpt-first', 'gpt-selected', 'claude-selected'].map(id => ({ id, object: 'model' })) }));
   const calls: { model: string; image: boolean; estimate: boolean; path: string }[] = [];
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -42,6 +46,8 @@ test('GPT and Claude selections survive queued PDF reviews, reload and subsequen
   app.post('/api/gemini/synthesize-review', (req, res) => synthesize(req as any, res as any));
   app.post('/api/gemini/estimate-ve', (req, res) => estimateVe(req as any, res as any));
   app.get('/api/backend-status', (req, res) => status(req as any, res as any)); app.use(express.static('dist'));
+  let failSettingsSave = true;
+  app.all('/api/pgpt/models', (req, res) => req.method === 'PUT' && failSettingsSave ? res.status(503).json({ error: '시험용 설정 저장 실패' }) : modelSettings(req as any, res as any));
   const host = await listen(app); const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
@@ -50,7 +56,20 @@ test('GPT and Claude selections survive queued PDF reviews, reload and subsequen
     await page.goto(host.url); await page.getByRole('button', { name: /새 문서 검토/ }).click();
     await page.getByRole('button', { name: /^GPT 사내/ }).click();
     await expect(page.getByRole('combobox', { name: '사용 모델' })).toContainText('gpt-selected');
-    await page.getByRole('combobox', { name: '사용 모델' }).selectOption('gpt-selected');
+    await page.getByRole('button', { name: 'GPT · Claude 모델 설정', exact: true }).click();
+    const settingsDialog = page.getByRole('dialog');
+    await expect(settingsDialog.getByRole('combobox', { name: 'GPT 기본 모델' })).toBeVisible();
+    await settingsDialog.getByRole('combobox', { name: 'GPT 기본 모델' }).selectOption('gpt-selected');
+    await settingsDialog.getByRole('button', { name: '기본 모델 저장' }).click();
+    await expect(settingsDialog.getByRole('alert')).toContainText('시험용 설정 저장 실패');
+    await assert.rejects(fs.access(path.join(root, 'model-settings.json')));
+    failSettingsSave = false;
+    await settingsDialog.getByRole('button', { name: '기본 모델 저장' }).click();
+    await expect(settingsDialog).not.toBeVisible();
+    await expect(page.getByRole('combobox', { name: '사용 모델' })).toHaveValue('gpt-selected');
+    await page.reload(); await page.getByRole('button', { name: /새 문서 검토/ }).click();
+    await page.getByRole('button', { name: /^GPT 사내/ }).click();
+    await expect(page.getByRole('combobox', { name: '사용 모델' })).toHaveValue('gpt-selected');
     await page.locator('input[type=file]').setInputFiles({ name: 'gpt.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() });
     await expect.poll(() => calls.length).toBe(1);
     await page.getByRole('button', { name: /^Claude 사내/ }).click();

@@ -4,6 +4,7 @@ import { normalizeFinding } from '../lib/reviewClassification';
 import React, { useState, useRef, useEffect } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { UploadFile, PageTab, ReviewItem, DesignErrorItem, SafetyItem, VeItem, DocCategory, TradeCategory, ReviewProvider } from '../types';
+import { PgptModelSettingsDialog } from './PgptModelSettingsDialog';
 import { PdfViewerModal } from './PdfViewerModal';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -85,6 +86,8 @@ export const UploadView: React.FC<UploadViewProps> = ({
   const [selectedTradeCategory, setSelectedTradeCategory] = useState<TradeCategory>('소방');
   const [reviewProvider, setReviewProvider] = useState<ReviewProvider>('gemini');
   const [reviewModel, setReviewModel] = useState('gemini-3.5-flash');
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const [modelSettingsMessage, setModelSettingsMessage] = useState('');
   const [modelOptions, setModelOptions] = useState({ gpt: ['gpt-5.4'], claude: ['claude-sonnet-4.6'] });
   useEffect(() => {
     const controller = new AbortController();
@@ -884,6 +887,13 @@ export const UploadView: React.FC<UploadViewProps> = ({
             <button type="button" onClick={() => { setReviewProvider('nvidia'); setReviewModel('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'); }} className={`rounded-lg border p-2 text-left ${reviewProvider === 'nvidia' ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">NVIDIA NIM</b><span className="text-[10px]">Nemotron Omni Vision</span></button>
               {(['gpt', 'claude'] as const).map(provider => <button key={provider} type="button" onClick={() => { setReviewProvider(provider); setReviewModel(modelOptions[provider][0]); }} className={`rounded-lg border p-2 text-left ${reviewProvider === provider ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}><b className="block text-xs">{provider === 'gpt' ? 'GPT' : 'Claude'}</b><span className="text-[10px]">사내 P-GPT · {modelOptions[provider][0]}</span></button>)}
             </div>
+            <button type="button" onClick={() => { setModelSettingsMessage(''); setModelSettingsOpen(true); }} className="mt-3 rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-blue-900">GPT · Claude 모델 설정</button>
+            {modelSettingsMessage && <p role="status" className="mt-2 text-xs text-green-700">{modelSettingsMessage}</p>}
+            {modelSettingsOpen && <PgptModelSettingsDialog onClose={() => setModelSettingsOpen(false)} onSave={settings => {
+              setModelOptions({ gpt: [settings.gpt.defaultModel, ...settings.gpt.models.filter(id => id !== settings.gpt.defaultModel)], claude: [settings.claude.defaultModel, ...settings.claude.models.filter(id => id !== settings.claude.defaultModel)] });
+              if (reviewProvider === 'gpt' || reviewProvider === 'claude') setReviewModel(settings[reviewProvider].defaultModel);
+              setModelSettingsOpen(false); setModelSettingsMessage('기본 모델을 저장했습니다. 다음 문서 검토부터 적용됩니다.');
+            }} />}
             {(reviewProvider === 'gpt' || reviewProvider === 'claude') && <label className="mt-3 block text-xs text-slate-700">사용 모델<select aria-label="사용 모델" value={reviewModel} onChange={e => setReviewModel(e.target.value)} className="ml-2 rounded border border-slate-300 px-2 py-1">{modelOptions[reviewProvider].map(model => <option key={model} value={model}>{model}</option>)}</select></label>}
           </div>
         </div>

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { geminiBaseUrl } from './geminiService.js';
 import { parseModelJson } from '../lib/reviewNormalization.js';
+import { readModelSettings } from './pgptModelSettingsStore.js';
 
 export type PgptProvider = 'gpt' | 'claude';
 export interface JsonOptions { model?: string; image?: { mimeType: string; data: string }; deadlineMs?: number; }
@@ -10,8 +11,19 @@ const lastCalls: Partial<Record<PgptProvider, CallStatus>> = {};
 const key = () => process.env.PGPT_API_KEY || process.env.GEMINI_API_KEY;
 const prefix = (provider: PgptProvider) => provider === 'gpt' ? 'PGPT_GPT' : 'PGPT_CLAUDE';
 export function pgptModels(provider: PgptProvider): string[] {
+  const saved = readModelSettings()?.[provider];
+  if (saved) return [saved.defaultModel, ...saved.models.filter(id => id !== saved.defaultModel)];
   const p = prefix(provider);
   return [...new Set((process.env[p + '_MODELS'] || process.env[p + '_MODEL'] || (provider === 'gpt' ? 'gpt-5.4' : 'claude-sonnet-4.6')).split(',').map(s => s.trim()).filter(Boolean))];
+}
+export async function listPgptModels(): Promise<Record<PgptProvider, string[]>> {
+  const apiKey = key();
+  if (!apiKey) throw failure('사내 P-GPT API 키를 설정하세요.', 503);
+  const client = new OpenAI({ apiKey, baseURL: pgptBaseUrl('gpt'), maxRetries: 0, timeout: 15000 });
+  const result = await client.models.list();
+  if (!Array.isArray(result.data)) throw failure('P-GPT 모델 목록 응답을 확인할 수 없습니다.');
+  const ids = result.data.map(model => model.id).filter(id => typeof id === 'string' && /^[a-zA-Z0-9._:-]{1,150}$/.test(id));
+  return { gpt: [...new Set(ids.filter(id => id.startsWith('gpt-')))], claude: [...new Set(ids.filter(id => id.startsWith('claude-')))] };
 }
 export function pgptBaseUrl(provider: PgptProvider) {
   return (process.env[prefix(provider) + '_BASE_URL'] || (provider === 'gpt' ? geminiBaseUrl() + '/v1' : geminiBaseUrl())).replace(/\/+$/, '');
